@@ -1,5 +1,0 @@
-owner: agdsn
-git-repo: ldap-openfga-sync
-chart-repos:
-  - ldap-openfga-sync=https://agdsn.github.io/ldap-openfga-sync
-
