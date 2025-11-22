@@ -63,12 +63,7 @@ spec:
           {{- toYaml .Values.resources | nindent 12 }}
       volumes:
       - name: logs
-        {{- if .Values.persistence.enabled }}
-        persistentVolumeClaim:
-          claimName: {{ .Values.persistence.existingClaim | default (printf "%s-logs" (include "ldap-openfga-sync.fullname" .)) }}
-        {{- else }}
         emptyDir: {}
-        {{- end }}
       {{- if or .Values.ldap.caCert .Values.ldap.existingCaCertSecret }}
       - name: ldap-ca-cert
         secret:
