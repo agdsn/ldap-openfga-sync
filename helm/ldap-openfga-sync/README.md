@@ -6,7 +6,7 @@ This Helm chart deploys the LDAP to OpenFGA group membership synchronization ser
 
 ```bash
 # Add the Helm repository
-helm repo add ldap-openfga-sync https://your-username.github.io/ldap-openfga-sync
+helm repo add ldap-openfga-sync https://agdsn.github.io/ldap-openfga-sync
 
 # Update repositories
 helm repo update
@@ -34,7 +34,7 @@ helm install my-ldap-sync ldap-openfga-sync/ldap-openfga-sync \
 ### From Helm Repository
 
 ```bash
-helm repo add ldap-openfga-sync https://your-username.github.io/ldap-openfga-sync
+helm repo add ldap-openfga-sync https://agdsn.github.io/ldap-openfga-sync
 helm repo update
 helm install my-ldap-sync ldap-openfga-sync/ldap-openfga-sync -f values.yaml
 ```
@@ -42,7 +42,7 @@ helm install my-ldap-sync ldap-openfga-sync/ldap-openfga-sync -f values.yaml
 ### From Source
 
 ```bash
-git clone https://github.com/your-username/ldap-openfga-sync.git
+git clone https://github.com/agdsn/ldap-openfga-sync.git
 cd ldap-openfga-sync
 helm install my-ldap-sync ./helm/ldap-openfga-sync -f values.yaml
 ```
@@ -61,7 +61,7 @@ The following table lists the configurable parameters of the chart and their def
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.repository` | Image repository | `ghcr.io/your-username/ldap-openfga-sync` |
+| `image.repository` | Image repository | `ghcr.io/agdsn/ldap-openfga-sync` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `image.tag` | Image tag | `""` (uses appVersion) |
 | `imagePullSecrets` | Image pull secrets | `[]` |
@@ -211,7 +211,7 @@ The ConfigMap will be automatically created with the non-sensitive values from y
 Create a `values.yaml`:
 ```yaml
 image:
-  repository: ghcr.io/your-username/ldap-openfga-sync
+  repository: ghcr.io/agdsn/ldap-openfga-sync
   tag: "1.0.0"
 
 ldap:

@@ -3,7 +3,7 @@ version: '3.8'
 
 services:
   ldap-openfga-sync:
-    image: ghcr.io/your-username/ldap-openfga-sync:latest
+    image: ghcr.io/agdsn/ldap-openfga-sync:latest
     # Or build locally:
     # build: .
     container_name: ldap-openfga-sync

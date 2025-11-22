@@ -100,7 +100,7 @@ The easiest way to deploy on Kubernetes is using the official Helm chart:
 
 ```bash
 # Add the Helm repository
-helm repo add ldap-openfga-sync https://your-username.github.io/ldap-openfga-sync
+helm repo add ldap-openfga-sync https://agdsn.github.io/ldap-openfga-sync
 helm repo update
 
 # Install the chart
@@ -123,7 +123,7 @@ Deploy using Docker for simpler setups. The container runs the sync automaticall
 
 ```bash
 # Pull the image
-docker pull ghcr.io/your-username/ldap-openfga-sync:latest
+docker pull ghcr.io/agdsn/ldap-openfga-sync:latest
 
 # Create configuration
 cp .env.example .env
@@ -134,7 +134,7 @@ docker run -d \
   --name ldap-openfga-sync \
   --env-file .env \
   -v $(pwd)/logs:/var/log/ldap-openfga-sync \
-  ghcr.io/your-username/ldap-openfga-sync:latest
+  ghcr.io/agdsn/ldap-openfga-sync:latest
 ```
 
 ## Usage
