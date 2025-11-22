@@ -74,7 +74,6 @@ function run_tests() {
     fi
 
     # Run tests
-    source .venv/bin/activate
     python test_suite.py
 
     TEST_EXIT_CODE=$?
