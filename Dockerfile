@@ -25,12 +25,7 @@ COPY *.py ./
 # Create log directory
 RUN mkdir -p /var/log/ldap-openfga-sync
 
-# Create cron job to run sync every 6 hours
-RUN echo "0 */6 * * * cd /app && /usr/local/bin/python sync.py >> /var/log/ldap-openfga-sync/sync.log 2>&1" > /etc/cron.d/ldap-sync && \
-    chmod 0644 /etc/cron.d/ldap-sync && \
-    crontab /etc/cron.d/ldap-sync
-
-# Copy and setup entrypoint script
+# Copy and setup entrypoint script (cron will be configured at runtime)
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 

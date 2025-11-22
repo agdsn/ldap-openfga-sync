@@ -92,11 +92,34 @@ Edit the `.env` file with your settings:
    python sync.py
    ```
 
-## Docker Deployment
+## Deployment Options
 
-The easiest way to deploy this service is using Docker. The container runs the sync automatically every 6 hours.
+### Kubernetes with Helm (Recommended for Production)
 
-### Quick Start with Docker
+The easiest way to deploy on Kubernetes is using the official Helm chart:
+
+```bash
+# Add the Helm repository
+helm repo add ldap-openfga-sync https://your-username.github.io/ldap-openfga-sync
+helm repo update
+
+# Install the chart
+helm install my-ldap-sync ldap-openfga-sync/ldap-openfga-sync \
+  --set ldap.server="ldap://ldap.example.com:389" \
+  --set ldap.bindDn="cn=admin,dc=example,dc=com" \
+  --set ldap.bindPassword="your-password" \
+  --set ldap.groupBaseDn="ou=groups,dc=example,dc=com" \
+  --set openfga.apiUrl="http://openfga:8080" \
+  --set openfga.storeId="your-store-id"
+```
+
+For detailed Helm deployment instructions, see [HELM_SETUP.md](HELM_SETUP.md) and [helm/ldap-openfga-sync/README.md](helm/ldap-openfga-sync/README.md).
+
+### Docker Deployment
+
+Deploy using Docker for simpler setups. The container runs the sync automatically every 6 hours.
+
+#### Quick Start with Docker
 
 ```bash
 # Pull the image
