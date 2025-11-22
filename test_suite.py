@@ -104,15 +104,7 @@ class TestEnvironment:
         self.store_id = response.json()["id"]
         logger.info(f"Created store: {self.store_id}")
 
-        # Update .env.test with store ID
-        with open('.env.test', 'r') as f:
-            env_content = f.read()
-        env_content = re.sub(r'OPENFGA_STORE_ID=.*', f'OPENFGA_STORE_ID={self.store_id}', env_content)
-        with open('.env.test', 'w') as f:
-            f.write(env_content)
-
-        # Reload environment
-        load_dotenv('.env.test', override=True)
+        os.environ['OPENFGA_STORE_ID'] = self.store_id
 
         # Create authorization model
         with open('test/data/authorization-model.json', 'r') as f:
@@ -274,6 +266,10 @@ class TestRunner:
         self.passed = 0
         self.failed = 0
 
+    def set_sync_groups(self, groups: List[str]):
+        """Set the SYNC_GROUPS environment variable for the test"""
+        os.environ['SYNC_GROUPS'] = ','.join(groups)
+
     async def run_test(self, name: str, test_func):
         """Run a single test scenario"""
         logger.info(f"\n{'='*60}")
@@ -297,8 +293,8 @@ class TestRunner:
         """Test 1: Initial sync from LDAP to empty OpenFGA"""
         await self.env.clear_openfga_tuples()
 
-        # Create groups in OpenFGA (but no members)
-        await self.env.add_openfga_groups(['developers', 'operations', 'managers', 'qa-team'])
+        # Set groups to sync
+        self.set_sync_groups(['developers', 'operations', 'managers', 'qa-team'])
 
         # Get expected memberships from LDAP
         expected = self.env.get_ldap_memberships(['developers', 'operations', 'managers', 'qa-team'])
@@ -320,8 +316,10 @@ class TestRunner:
         """Test 2: No changes when already in sync"""
         await self.env.clear_openfga_tuples()
 
-        # Create groups and memberships
-        await self.env.add_openfga_groups(['developers', 'operations'])
+        # Set groups to sync
+        self.set_sync_groups(['developers', 'operations'])
+
+        # Create memberships
         await self.env.add_openfga_memberships([
             {'email': 'alice@example.com', 'group': 'developers'},
             {'email': 'bob@example.com', 'group': 'developers'},
@@ -344,8 +342,10 @@ class TestRunner:
         """Test 3: Add new members from LDAP"""
         await self.env.clear_openfga_tuples()
 
-        # Create groups with partial memberships
-        await self.env.add_openfga_groups(['developers', 'operations'])
+        # Set groups to sync
+        self.set_sync_groups(['developers', 'operations'])
+
+        # Create partial memberships
         await self.env.add_openfga_memberships([
             {'email': 'alice@example.com', 'group': 'developers'},
             # Missing bob in developers
@@ -375,8 +375,10 @@ class TestRunner:
         """Test 4: Remove members not in LDAP"""
         await self.env.clear_openfga_tuples()
 
-        # Create groups with extra memberships not in LDAP
-        await self.env.add_openfga_groups(['developers'])
+        # Set groups to sync
+        self.set_sync_groups(['developers'])
+
+        # Create extra memberships not in LDAP
         await self.env.add_openfga_memberships([
             {'email': 'alice@example.com', 'group': 'developers'},
             {'email': 'bob@example.com', 'group': 'developers'},
@@ -405,8 +407,10 @@ class TestRunner:
         """Test 5: Mixed additions and deletions"""
         await self.env.clear_openfga_tuples()
 
-        # Create groups with some correct, some extra, some missing
-        await self.env.add_openfga_groups(['developers', 'operations', 'managers'])
+        # Set groups to sync
+        self.set_sync_groups(['developers', 'operations', 'managers'])
+
+        # Create some correct, some extra, some missing
         await self.env.add_openfga_memberships([
             {'email': 'alice@example.com', 'group': 'developers'},     # Correct
             {'email': 'charlie@example.com', 'group': 'developers'},   # Should be removed
@@ -436,11 +440,11 @@ class TestRunner:
         assert after == expected, f"Expected {expected}, got {after}"
 
     async def test_group_filtering(self):
-        """Test 6: Only sync groups that exist in OpenFGA"""
+        """Test 6: Only sync specified groups (not all groups)"""
         await self.env.clear_openfga_tuples()
 
-        # Only create some groups in OpenFGA (not-in-openfga should be skipped)
-        await self.env.add_openfga_groups(['developers', 'operations'])
+        # Set only specific groups to sync (others should be skipped)
+        self.set_sync_groups(['developers', 'operations'])
 
         before = await self.env.get_openfga_memberships()
         logger.info(f"Before sync: {before}")
@@ -451,7 +455,7 @@ class TestRunner:
         after = await self.env.get_openfga_memberships()
         logger.info(f"After sync: {after}")
 
-        # Should only have developers and operations, not not-in-openfga
+        # Should only have developers and operations, not managers/qa-team/not-in-openfga
         for email, group in after:
             assert group in ['developers', 'operations'], f"Unexpected group {group} was synced"
 
@@ -460,11 +464,13 @@ class TestRunner:
         assert groups_synced == {'developers', 'operations'}, f"Expected developers and operations, got {groups_synced}"
 
     async def test_empty_ldap_group(self):
-        """Test 7: Handle empty groups gracefully"""
+        """Test 7: Handle groups with different members"""
         await self.env.clear_openfga_tuples()
 
+        # Set groups to sync
+        self.set_sync_groups(['qa-team'])
+
         # Create a group with members in OpenFGA
-        await self.env.add_openfga_groups(['qa-team'])
         await self.env.add_openfga_memberships([
             {'email': 'alice@example.com', 'group': 'qa-team'},  # Not in LDAP for this group
             {'email': 'bob@example.com', 'group': 'qa-team'},    # Not in LDAP for this group
@@ -483,6 +489,84 @@ class TestRunner:
         # Should only have eve (the actual member in LDAP)
         expected = {('eve@example.com', 'qa-team')}
         assert after == expected, f"Expected {expected}, got {after}"
+
+    async def test_sync_all_groups(self):
+        """Test 8: Sync all LDAP groups when SYNC_GROUPS is not specified"""
+        await self.env.clear_openfga_tuples()
+
+        # Don't set SYNC_GROUPS - should sync all groups from LDAP
+        os.environ['SYNC_GROUPS'] = ''
+
+        before = await self.env.get_openfga_memberships()
+        logger.info(f"Before sync: {before}")
+
+        # Run sync
+        await sync_ldap_to_openfga()
+
+        after = await self.env.get_openfga_memberships()
+        logger.info(f"After sync: {after}")
+
+        # Should have synced ALL groups from LDAP (including not-in-openfga)
+        # Get all memberships from LDAP
+        expected = self.env.get_ldap_memberships()
+
+        assert after == expected, f"Expected all groups to be synced. Expected {expected}, got {after}"
+
+        # Verify we have all the different groups
+        groups_synced = {group for email, group in after}
+        logger.info(f"Groups synced: {groups_synced}")
+
+        # Should include all groups from LDAP
+        assert 'developers' in groups_synced, "developers group not synced"
+        assert 'operations' in groups_synced, "operations group not synced"
+        assert 'managers' in groups_synced, "managers group not synced"
+        assert 'qa-team' in groups_synced, "qa-team group not synced"
+        assert 'not-in-openfga' in groups_synced, "not-in-openfga group not synced"
+
+    async def test_ignore_groups_not_in_sync_list(self):
+        """Test 9: Groups not in SYNC_GROUPS should not be touched"""
+        await self.env.clear_openfga_tuples()
+
+        # Set only specific groups to sync
+        self.set_sync_groups(['developers', 'operations'])
+
+        # Add memberships for groups both in and NOT in the sync list
+        await self.env.add_openfga_memberships([
+            # Groups in sync list
+            {'email': 'alice@example.com', 'group': 'developers'},
+            {'email': 'bob@example.com', 'group': 'developers'},
+            {'email': 'charlie@example.com', 'group': 'operations'},
+            # Groups NOT in sync list - these should remain untouched
+            {'email': 'alice@example.com', 'group': 'managers'},
+            {'email': 'eve@example.com', 'group': 'qa-team'},
+            {'email': 'frank@example.com', 'group': 'external-group'},
+        ])
+
+        before = await self.env.get_openfga_memberships()
+        logger.info(f"Before sync: {before}")
+
+        # Run sync
+        await sync_ldap_to_openfga()
+
+        after = await self.env.get_openfga_memberships()
+        logger.info(f"After sync: {after}")
+
+        # Groups in sync list should be synced correctly
+        assert ('alice@example.com', 'developers') in after
+        assert ('bob@example.com', 'developers') in after
+        assert ('charlie@example.com', 'operations') in after
+        assert ('dave@example.com', 'operations') in after  # Should be added from LDAP
+
+        # Groups NOT in sync list should remain completely untouched
+        assert ('alice@example.com', 'managers') in after, "managers group membership was removed but shouldn't be"
+        assert ('eve@example.com', 'qa-team') in after, "qa-team group membership was removed but shouldn't be"
+        assert ('frank@example.com', 'external-group') in after, "external-group membership was removed but shouldn't be"
+
+        # Verify the untouched groups are still there
+        groups_in_openfga = {group for email, group in after}
+        assert 'managers' in groups_in_openfga, "managers group should still exist"
+        assert 'qa-team' in groups_in_openfga, "qa-team group should still exist"
+        assert 'external-group' in groups_in_openfga, "external-group should still exist"
 
     def print_summary(self):
         """Print test summary"""
@@ -519,8 +603,10 @@ async def main():
         await runner.run_test("Add new members from LDAP", runner.test_additions)
         await runner.run_test("Remove members not in LDAP", runner.test_deletions)
         await runner.run_test("Mixed additions and deletions", runner.test_mixed_changes)
-        await runner.run_test("Group filtering (only sync OpenFGA groups)", runner.test_group_filtering)
+        await runner.run_test("Group filtering (only sync specified groups)", runner.test_group_filtering)
         await runner.run_test("Handle groups with different members", runner.test_empty_ldap_group)
+        await runner.run_test("Sync all groups when SYNC_GROUPS not specified", runner.test_sync_all_groups)
+        await runner.run_test("Groups not in SYNC_GROUPS are not touched", runner.test_ignore_groups_not_in_sync_list)
 
         # Print summary
         runner.print_summary()

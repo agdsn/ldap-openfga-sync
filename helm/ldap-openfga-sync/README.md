@@ -142,6 +142,7 @@ When using `existingSecret`, the secret must contain these keys:
 |-----------|-------------|---------|
 | `sync.dryRun` | Enable dry-run mode | `false` |
 | `sync.schedule` | Cron schedule | `0 */6 * * *` |
+| `sync.groups` | List of groups to sync (empty = sync all) | `[]` |
 
 ### Persistence
 
@@ -175,8 +176,11 @@ helm install my-ldap-sync ldap-openfga-sync/ldap-openfga-sync \
   --set ldap.bindPassword="secret" \
   --set ldap.groupBaseDn="ou=groups,dc=example,dc=com" \
   --set openfga.apiUrl="http://openfga:8080" \
-  --set openfga.storeId="01234567890ABCDEF"
+  --set openfga.storeId="01234567890ABCDEF" \
+  --set sync.groups="{developers,operations,managers}"
 ```
+
+**Note**: If `sync.groups` is not specified or is empty, all groups from LDAP will be synced.
 
 ### Configuration Management
 

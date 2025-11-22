@@ -23,4 +23,7 @@ data:
   # Sync Configuration
   SYNC_DRY_RUN: {{ .Values.sync.dryRun | quote }}
   CRON_SCHEDULE: {{ .Values.sync.schedule | quote }}
+  {{- if .Values.sync.groups }}
+  SYNC_GROUPS: {{ .Values.sync.groups | join "," | quote }}
+  {{- end }}
 

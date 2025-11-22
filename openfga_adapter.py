@@ -34,6 +34,7 @@ class OpenFGAAdapter(Adapter):
         self.store_id: str = ""
         self.dry_run: bool = False
         self.pending_operations: list = []
+        self.sync_groups: Optional[Set[str]] = None
 
     async def connect_openfga(self):
         """Establish connection to OpenFGA."""
@@ -59,38 +60,7 @@ class OpenFGAAdapter(Adapter):
         self.client = OpenFgaClient(configuration)
         logger.info("Successfully connected to OpenFGA")
 
-    async def get_existing_groups(self) -> Set[str]:
-        """
-        Query OpenFGA to get all existing groups.
-        Returns a set of group names.
-        """
-        logger.info("Fetching existing groups from OpenFGA")
-        groups = set()
 
-        try:
-            # Read all tuples with type 'group'
-            # We look for any tuple where the object is 'group:*'
-            # Read all tuples and filter for groups
-            body = ReadRequestTupleKey()
-            response = await self.client.read(body=body)
-
-            if hasattr(response, 'tuples') and response.tuples:
-                for tuple_data in response.tuples:
-                    if hasattr(tuple_data, 'key'):
-                        obj = tuple_data.key.object
-                        if obj.startswith('group:'):
-                            group_name = obj.split(':', 1)[1]
-                            groups.add(group_name)
-
-            logger.info(f"Found {len(groups)} existing groups in OpenFGA")
-
-        except Exception as e:
-            logger.error(f"Failed to fetch groups from OpenFGA: {e}")
-            # If we can't fetch groups, we should fail safely
-            # For now, log warning and continue
-            logger.warning("Continuing without group validation - all LDAP groups will be attempted")
-
-        return groups
 
     async def load(self):
         """Load existing group memberships from OpenFGA."""
@@ -122,6 +92,11 @@ class OpenFGAAdapter(Adapter):
                         if user_str.startswith('user:') and group_str.startswith('group:'):
                             user_email = user_str.split(':', 1)[1]
                             group_name = group_str.split(':', 1)[1]
+
+                            # Only load memberships for groups in the sync list
+                            if self.sync_groups is not None and group_name not in self.sync_groups:
+                                logger.debug(f"Skipping membership {user_email} -> {group_name} - group not in sync list")
+                                continue
 
                             membership = GroupMembership(
                                 user_email=user_email,

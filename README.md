@@ -5,7 +5,6 @@ This script synchronizes group memberships from LDAP to OpenFGA using the [diffs
 ## Features
 
 - Syncs group memberships from LDAP to OpenFGA
-- Only syncs memberships for groups that already exist in OpenFGA
 - Uses diffsync library to calculate and apply only the necessary changes
 - Supports dry-run mode to preview changes before applying them
 - Users are identified by their email addresses
@@ -16,7 +15,6 @@ This script synchronizes group memberships from LDAP to OpenFGA using the [diffs
 - Python 3.8+
 - LDAP server with group memberships
 - OpenFGA instance
-- Groups must already exist in OpenFGA (this script only syncs memberships)
 
 ## Installation
 
@@ -69,6 +67,7 @@ Edit the `.env` file with your settings:
 
 ### Sync Configuration
 
+- `SYNC_GROUPS`: Comma-separated list of groups to sync (e.g., `developers,operations,managers`). If not specified or empty, all groups from LDAP will be synced.
 - `SYNC_DRY_RUN`: Set to `true` for dry-run mode (preview changes without applying them)
 
 ## Quick Start

@@ -27,6 +27,20 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 
+def load_sync_groups_from_config():
+    """Load the list of groups to sync from configuration."""
+    groups_config = os.getenv("SYNC_GROUPS", "")
+
+    if groups_config:
+        # Parse comma-separated list and strip whitespace
+        sync_groups = {g.strip() for g in groups_config.split(',') if g.strip()}
+        logger.info(f"Loaded {len(sync_groups)} groups from config: {', '.join(sorted(sync_groups))}")
+        return sync_groups
+    else:
+        # If no groups specified, sync all groups from LDAP
+        logger.info("No SYNC_GROUPS configured - will sync all groups from LDAP")
+        return None  # None means sync all groups
+
 
 async def sync_ldap_to_openfga():
     """
@@ -39,19 +53,24 @@ async def sync_ldap_to_openfga():
     if dry_run:
         logger.info("Running in DRY RUN mode - no changes will be made")
 
+    # Load sync groups from configuration
+    sync_groups = load_sync_groups_from_config()
+
     # Initialize adapters
     ldap_adapter = LDAPAdapter()
     openfga_adapter = OpenFGAAdapter()
     openfga_adapter.dry_run = dry_run
 
-    try:
-        # Connect to OpenFGA and get existing groups
-        await openfga_adapter.connect_openfga()
-        existing_groups = await openfga_adapter.get_existing_groups()
+    # Set sync groups for both adapters
+    ldap_adapter.sync_groups = sync_groups
+    openfga_adapter.sync_groups = sync_groups
 
-        # Connect to LDAP and set valid groups
+    try:
+        # Connect to OpenFGA
+        await openfga_adapter.connect_openfga()
+
+        # Connect to LDAP
         ldap_adapter.connect_ldap()
-        ldap_adapter.set_valid_groups(existing_groups)
 
         # Load data from both sources
         ldap_adapter.load()

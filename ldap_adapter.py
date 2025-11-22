@@ -26,7 +26,7 @@ class LDAPAdapter(Adapter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.ldap_conn = None
-        self.valid_groups: Set[str] = set()
+        self.sync_groups: Set[str] = set()
 
     def connect_ldap(self):
         """Establish connection to LDAP server."""
@@ -65,10 +65,6 @@ class LDAPAdapter(Adapter):
             self.ldap_conn.unbind_s()
             logger.info("Disconnected from LDAP")
 
-    def set_valid_groups(self, groups: Set[str]):
-        """Set the list of valid groups that exist in OpenFGA."""
-        self.valid_groups = groups
-        logger.info(f"Set {len(groups)} valid groups for sync")
 
     def extract_email_from_dn(self, dn: str) -> Optional[str]:
         """
@@ -147,9 +143,9 @@ class LDAPAdapter(Adapter):
                     logger.warning(f"Group {dn} has no cn attribute, skipping")
                     continue
 
-                # Only process groups that exist in OpenFGA
-                if group_name not in self.valid_groups:
-                    logger.debug(f"Skipping group '{group_name}' - not in OpenFGA")
+                # Only process groups that are configured to sync (if sync_groups is specified)
+                if self.sync_groups is not None and group_name not in self.sync_groups:
+                    logger.debug(f"Skipping group '{group_name}' - not in SYNC_GROUPS config")
                     skipped_groups += 1
                     continue
 
@@ -181,7 +177,8 @@ class LDAPAdapter(Adapter):
                             logger.warning(f"Could not extract email from member DN: {member}")
 
             logger.info(f"Loaded {membership_count} memberships from LDAP")
-            logger.info(f"Skipped {skipped_groups} groups not in OpenFGA")
+            if skipped_groups > 0:
+                logger.info(f"Skipped {skipped_groups} groups not in SYNC_GROUPS config")
 
         except ldap.LDAPError as e:
             logger.error(f"LDAP search failed: {e}")

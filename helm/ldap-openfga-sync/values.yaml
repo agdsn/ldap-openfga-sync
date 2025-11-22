@@ -84,6 +84,14 @@ sync:
   dryRun: false
   # Cron schedule (default: every 6 hours)
   schedule: "0 */6 * * *"
+  # List of groups to sync from LDAP to OpenFGA
+  # Only these groups will be synchronized
+  groups: []
+  # Example:
+  # groups:
+  #   - developers
+  #   - operations
+  #   - managers
 
 # Liveness and readiness probes
 livenessProbe:
