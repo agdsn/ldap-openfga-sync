@@ -1,0 +1,64 @@
+# Docker Compose for production deployment
+version: '3.8'
+
+services:
+  ldap-openfga-sync:
+    image: ghcr.io/your-username/ldap-openfga-sync:latest
+    # Or build locally:
+    # build: .
+    container_name: ldap-openfga-sync
+    restart: unless-stopped
+
+    # Mount environment file
+    env_file:
+      - .env
+
+    # Alternative: Use environment variables directly
+    # environment:
+    #   - LDAP_SERVER=ldap://ldap.example.com:389
+    #   - LDAP_BIND_DN=cn=admin,dc=example,dc=com
+    #   - LDAP_BIND_PASSWORD=your-password
+    #   - LDAP_GROUP_BASE_DN=ou=groups,dc=example,dc=com
+    #   - OPENFGA_API_URL=http://openfga:8080
+    #   - OPENFGA_STORE_ID=your-store-id
+    #   - SYNC_DRY_RUN=false
+
+    # Mount logs directory
+    volumes:
+      - ./logs:/var/log/ldap-openfga-sync
+
+    # Network configuration
+    networks:
+      - ldap-network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "pgrep", "cron"]
+      interval: 1h
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  ldap-network:
+    external: true
+    # Or create it:
+    # driver: bridge
+

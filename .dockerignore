@@ -1,0 +1,54 @@
+# Docker ignore file
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+
+# Test files
+test_suite.py
+test_connections.py
+validate_config.py
+test.sh
+test_output*.log
+test_run.log
+
+# Test data
+test/
+
+# Documentation
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files (these should be mounted at runtime)
+.env
+.env.test
+.env.example
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+

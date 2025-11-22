@@ -1,0 +1,5 @@
+diffsync~=2.1.0
+python-ldap~=3.4.5
+python-dotenv~=1.2.1
+openfga-sdk~=0.9.8
+requests~=2.32.5

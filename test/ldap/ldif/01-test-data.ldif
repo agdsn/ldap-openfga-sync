@@ -1,0 +1,89 @@
+# Create OUs
+dn: ou=users,dc=example,dc=com
+objectClass: organizationalUnit
+ou: users
+
+dn: ou=groups,dc=example,dc=com
+objectClass: organizationalUnit
+ou: groups
+
+# Create Users
+dn: cn=alice,ou=users,dc=example,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+cn: alice
+sn: Smith
+mail: alice@example.com
+userPassword: password
+
+dn: cn=bob,ou=users,dc=example,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+cn: bob
+sn: Johnson
+mail: bob@example.com
+userPassword: password
+
+dn: cn=charlie,ou=users,dc=example,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+cn: charlie
+sn: Williams
+mail: charlie@example.com
+userPassword: password
+
+dn: cn=dave,ou=users,dc=example,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+cn: dave
+sn: Brown
+mail: dave@example.com
+userPassword: password
+
+dn: cn=eve,ou=users,dc=example,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+cn: eve
+sn: Davis
+mail: eve@example.com
+userPassword: password
+
+# Create Groups
+dn: cn=developers,ou=groups,dc=example,dc=com
+objectClass: groupOfNames
+cn: developers
+member: cn=alice,ou=users,dc=example,dc=com
+member: cn=bob,ou=users,dc=example,dc=com
+
+dn: cn=operations,ou=groups,dc=example,dc=com
+objectClass: groupOfNames
+cn: operations
+member: cn=charlie,ou=users,dc=example,dc=com
+member: cn=dave,ou=users,dc=example,dc=com
+
+dn: cn=managers,ou=groups,dc=example,dc=com
+objectClass: groupOfNames
+cn: managers
+member: cn=alice,ou=users,dc=example,dc=com
+
+dn: cn=qa-team,ou=groups,dc=example,dc=com
+objectClass: groupOfNames
+cn: qa-team
+member: cn=eve,ou=users,dc=example,dc=com
+
+dn: cn=not-in-openfga,ou=groups,dc=example,dc=com
+objectClass: groupOfNames
+cn: not-in-openfga
+member: cn=alice,ou=users,dc=example,dc=com
+member: cn=bob,ou=users,dc=example,dc=com
+

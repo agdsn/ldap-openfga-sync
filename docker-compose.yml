@@ -1,0 +1,46 @@
+services:
+  # OpenLDAP Server
+  ldap:
+    image: osixia/openldap:1.5.0
+    container_name: test-ldap
+    environment:
+      LDAP_ORGANISATION: "Test Company"
+      LDAP_DOMAIN: "example.com"
+      LDAP_ADMIN_PASSWORD: "admin"
+      LDAP_CONFIG_PASSWORD: "config"
+      LDAP_RFC2307BIS_SCHEMA: "true"
+      LDAP_REMOVE_CONFIG_AFTER_SETUP: "true"
+      LDAP_TLS_VERIFY_CLIENT: "never"
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ./test/ldap/ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    command: --copy-service
+    networks:
+      - test-network
+
+  # OpenFGA Server
+  openfga:
+    image: openfga/openfga:latest
+    container_name: test-openfga
+    command: run
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=memory
+      - OPENFGA_LOG_LEVEL=info
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "3000:3000"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  test-network:
+    driver: bridge
+
