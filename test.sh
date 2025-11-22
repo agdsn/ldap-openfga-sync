@@ -34,13 +34,13 @@ function start_services() {
     print_header "Starting Test Environment"
 
     print_info "Starting Docker containers..."
-    docker-compose up -d
+    docker compose up -d
 
     print_info "Waiting for services to be ready..."
     sleep 5
 
     # Check LDAP
-    if docker-compose exec -T ldap ldapsearch -x -H ldap://localhost -b "dc=example,dc=com" -D "cn=admin,dc=example,dc=com" -w admin > /dev/null 2>&1; then
+    if docker compose exec -T ldap ldapsearch -x -H ldap://localhost -b "dc=example,dc=com" -D "cn=admin,dc=example,dc=com" -w admin > /dev/null 2>&1; then
         print_success "LDAP is running"
     else
         print_error "LDAP failed to start"
@@ -60,7 +60,7 @@ function start_services() {
 
 function stop_services() {
     print_header "Stopping Test Environment"
-    docker-compose down -v
+    docker compose down -v
     print_success "Test environment stopped"
 }
 
@@ -68,7 +68,7 @@ function run_tests() {
     print_header "Running Test Suite"
 
     # Make sure services are running
-    if ! docker-compose ps | grep -q "Up"; then
+    if ! docker compose ps | grep -q "Up"; then
         print_info "Services not running, starting them..."
         start_services
     fi
@@ -96,13 +96,13 @@ function clean_restart() {
 
 function show_logs() {
     print_header "Service Logs"
-    docker-compose logs -f
+    docker compose logs -f
 }
 
 function show_ldap_data() {
     print_header "LDAP Data"
     print_info "Groups and Members:"
-    docker-compose exec ldap ldapsearch -x -H ldap://localhost \
+    docker compose exec ldap ldapsearch -x -H ldap://localhost \
         -b "ou=groups,dc=example,dc=com" \
         -D "cn=admin,dc=example,dc=com" \
         -w admin \

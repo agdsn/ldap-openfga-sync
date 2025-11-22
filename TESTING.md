@@ -155,14 +155,14 @@ await runner.run_test("No changes", runner.test_no_changes)
 
 ```bash
 # Search for all groups
-docker-compose exec ldap ldapsearch -x -H ldap://localhost \
+docker compose exec ldap ldapsearch -x -H ldap://localhost \
   -b "ou=groups,dc=example,dc=com" \
   -D "cn=admin,dc=example,dc=com" \
   -w admin \
   "(objectClass=groupOfNames)"
 
 # Search for all users
-docker-compose exec ldap ldapsearch -x -H ldap://localhost \
+docker compose exec ldap ldapsearch -x -H ldap://localhost \
   -b "ou=users,dc=example,dc=com" \
   -D "cn=admin,dc=example,dc=com" \
   -w admin \
@@ -231,7 +231,7 @@ python test_suite.py 2>&1 | tee test.log
 
 ```bash
 # Test LDAP directly
-docker-compose exec ldap ldapsearch -x -H ldap://localhost \
+docker compose exec ldap ldapsearch -x -H ldap://localhost \
   -b "dc=example,dc=com" \
   -D "cn=admin,dc=example,dc=com" \
   -w admin
@@ -244,7 +244,7 @@ docker-compose exec ldap ldapsearch -x -H ldap://localhost \
 curl http://localhost:8080/healthz
 
 # View OpenFGA logs
-docker-compose logs openfga
+docker compose logs openfga
 ```
 
 ## CI/CD Integration
