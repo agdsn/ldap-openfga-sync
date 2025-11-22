@@ -46,6 +46,11 @@ spec:
         volumeMounts:
         - name: logs
           mountPath: /var/log/ldap-openfga-sync
+        {{- if or .Values.ldap.caCert .Values.ldap.existingCaCertSecret }}
+        - name: ldap-ca-cert
+          mountPath: /etc/ldap/certs
+          readOnly: true
+        {{- end }}
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
           {{- toYaml .Values.livenessProbe | nindent 12 }}
@@ -58,7 +63,20 @@ spec:
           {{- toYaml .Values.resources | nindent 12 }}
       volumes:
       - name: logs
+        {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.existingClaim | default (printf "%s-logs" (include "ldap-openfga-sync.fullname" .)) }}
+        {{- else }}
         emptyDir: {}
+        {{- end }}
+      {{- if or .Values.ldap.caCert .Values.ldap.existingCaCertSecret }}
+      - name: ldap-ca-cert
+        secret:
+          secretName: {{ .Values.ldap.existingCaCertSecret | default (printf "%s-ca-cert" (include "ldap-openfga-sync.fullname" .)) }}
+          items:
+          - key: ca.crt
+            path: ca.crt
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

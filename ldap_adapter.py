@@ -34,10 +34,19 @@ class LDAPAdapter(Adapter):
         bind_dn = os.getenv("LDAP_BIND_DN")
         bind_password = os.getenv("LDAP_BIND_PASSWORD")
         use_tls = os.getenv("LDAP_USE_TLS", "false").lower() == "true"
+        ca_cert_file = os.getenv("LDAP_CA_CERT_FILE")
 
         logger.info(f"Connecting to LDAP server: {server}")
 
         try:
+            # Configure TLS certificate verification if CA cert is provided
+            if ca_cert_file and os.path.exists(ca_cert_file):
+                logger.info(f"Using custom CA certificate: {ca_cert_file}")
+                ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, ca_cert_file)
+                ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+            elif ca_cert_file:
+                logger.warning(f"CA certificate file not found: {ca_cert_file}")
+
             self.ldap_conn = ldap.initialize(server)
             self.ldap_conn.protocol_version = ldap.VERSION3
 

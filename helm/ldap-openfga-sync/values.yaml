@@ -65,6 +65,12 @@ ldap:
   groupFilter: "(objectClass=groupOfNames)"
   memberAttribute: "member"
   useTls: false
+  # Custom CA certificate for LDAP TLS verification
+  # Provide either caCert (inline) or existingCaCertSecret
+  caCert: ""
+  # Reference to existing secret containing CA certificate
+  # Expected key: ca.crt
+  existingCaCertSecret: ""
 
 # OpenFGA Configuration
 openfga:

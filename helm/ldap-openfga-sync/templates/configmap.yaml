@@ -12,6 +12,9 @@ data:
   LDAP_GROUP_FILTER: {{ .Values.ldap.groupFilter | quote }}
   LDAP_MEMBER_ATTRIBUTE: {{ .Values.ldap.memberAttribute | quote }}
   LDAP_USE_TLS: {{ .Values.ldap.useTls | quote }}
+  {{- if or .Values.ldap.caCert .Values.ldap.existingCaCertSecret }}
+  LDAP_CA_CERT_FILE: "/etc/ldap/certs/ca.crt"
+  {{- end }}
   # OpenFGA Configuration
   OPENFGA_API_URL: {{ .Values.openfga.apiUrl | quote }}
   {{- if .Values.openfga.authorizationModelId }}

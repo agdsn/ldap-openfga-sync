@@ -124,6 +124,8 @@ When using `existingSecret`, the secret must contain these keys:
 | `ldap.groupFilter` | Group filter | `(objectClass=groupOfNames)` |
 | `ldap.memberAttribute` | Member attribute | `member` |
 | `ldap.useTls` | Use TLS | `false` |
+| `ldap.caCert` | Custom CA certificate (inline PEM) | `""` |
+| `ldap.existingCaCertSecret` | Existing secret with CA certificate | `""` |
 
 ### OpenFGA Configuration
 
@@ -205,6 +207,43 @@ helm install my-ldap-sync ldap-openfga-sync/ldap-openfga-sync \
 ```
 
 The ConfigMap will be automatically created with the non-sensitive values from your `values.yaml`.
+
+### Using Custom CA Certificate
+
+For LDAP servers with self-signed certificates or internal CAs:
+
+**Option 1: Inline Certificate**
+```yaml
+ldap:
+  server: "ldaps://ldap.example.com:636"
+  useTls: true
+  caCert: |
+    -----BEGIN CERTIFICATE-----
+    MIIDXTCCAkWgAwIBAgIJAKZM...
+    -----END CERTIFICATE-----
+```
+
+**Option 2: Existing Secret**
+```bash
+# Create secret with CA certificate
+kubectl create secret generic ldap-ca-cert \
+  --from-file=ca.crt=/path/to/ca-cert.pem
+```
+
+```yaml
+ldap:
+  server: "ldaps://ldap.example.com:636"
+  useTls: true
+  existingCaCertSecret: "ldap-ca-cert"
+```
+
+**Option 3: Command Line**
+```bash
+helm install my-ldap-sync ldap-openfga-sync/ldap-openfga-sync \
+  --set-file ldap.caCert=/path/to/ca-cert.pem \
+  --set ldap.server="ldaps://ldap.example.com:636" \
+  --set ldap.useTls=true
+```
 
 ### Custom Values File
 

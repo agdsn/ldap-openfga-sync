@@ -58,6 +58,7 @@ Edit the `.env` file with your settings:
 - `LDAP_GROUP_FILTER`: LDAP filter to find groups (default: `(objectClass=groupOfNames)`)
 - `LDAP_MEMBER_ATTRIBUTE`: Attribute containing group members (default: `member`)
 - `LDAP_USE_TLS`: Whether to use TLS (true/false)
+- `LDAP_CA_CERT_FILE`: Path to custom CA certificate file for TLS verification (optional, for self-signed certificates)
 
 ### OpenFGA Configuration
 
