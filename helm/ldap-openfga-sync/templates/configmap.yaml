@@ -22,7 +22,9 @@ data:
   {{- end }}
   # Sync Configuration
   SYNC_DRY_RUN: {{ .Values.sync.dryRun | quote }}
-  CRON_SCHEDULE: {{ .Values.sync.schedule | quote }}
+  {{- if .Values.sync.intervalSeconds }}
+  SYNC_INTERVAL_SECONDS: {{ .Values.sync.intervalSeconds | quote }}
+  {{- end }}
   {{- if .Values.sync.groups }}
   SYNC_GROUPS: {{ .Values.sync.groups | join "," | quote }}
   {{- end }}

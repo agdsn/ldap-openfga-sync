@@ -82,8 +82,8 @@ openfga:
 # Sync Configuration
 sync:
   dryRun: false
-  # Cron schedule (default: every 6 hours)
-  schedule: "0 */6 * * *"
+  # Sync interval in seconds (default: 21600 = 6 hours)
+  intervalSeconds: 21600
   # List of groups to sync from LDAP to OpenFGA
   # Only these groups will be synchronized
   groups: []
@@ -99,7 +99,8 @@ livenessProbe:
   exec:
     command:
       - pgrep
-      - cron
+      - -f
+      - entrypoint.sh
   initialDelaySeconds: 30
   periodSeconds: 3600
   timeoutSeconds: 10
@@ -110,7 +111,8 @@ readinessProbe:
   exec:
     command:
       - pgrep
-      - cron
+      - -f
+      - entrypoint.sh
   initialDelaySeconds: 10
   periodSeconds: 60
   timeoutSeconds: 5

@@ -68,6 +68,7 @@ Edit the `.env` file with your settings:
 ### Sync Configuration
 
 - `SYNC_GROUPS`: Comma-separated list of groups to sync (e.g., `developers,operations,managers`). If not specified or empty, all groups from LDAP will be synced.
+- `SYNC_INTERVAL_SECONDS`: Sync interval in seconds (default: `21600` = 6 hours). Only used in Docker/containerized environments.
 - `SYNC_DRY_RUN`: Set to `true` for dry-run mode (preview changes without applying them)
 
 ## Quick Start
@@ -167,18 +168,6 @@ python test_connections.py
 This will verify:
 - LDAP connection and ability to query groups
 - OpenFGA connection and ability to read tuples
-
-### Scheduled Syncs
-
-You can set up a cron job to run the sync periodically:
-
-```bash
-# Edit crontab
-crontab -e
-
-# Add a line to run every hour:
-0 * * * * cd /path/to/ldap-openfga-sync && .venv/bin/python sync.py >> /var/log/ldap-openfga-sync.log 2>&1
-```
 
 ## How It Works
 

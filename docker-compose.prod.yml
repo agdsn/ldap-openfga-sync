@@ -43,7 +43,7 @@ services:
 
     # Health check
     healthcheck:
-      test: ["CMD", "pgrep", "cron"]
+      test: ["CMD", "pgrep", "entrypoint.sh"]
       interval: 1h
       timeout: 10s
       retries: 3

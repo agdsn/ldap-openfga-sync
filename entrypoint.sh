@@ -1,29 +1,29 @@
 #!/bin/bash
 set -e
 
-# Default schedule: every 6 hours
-CRON_SCHEDULE="${CRON_SCHEDULE:-0 */6 * * *}"
+# Default interval: every 6 hours (in seconds)
+SYNC_INTERVAL_SECONDS="${SYNC_INTERVAL_SECONDS:-21600}"
 
 echo "Starting LDAP to OpenFGA sync service..."
-echo "Sync schedule: $CRON_SCHEDULE"
+echo "Sync interval: ${SYNC_INTERVAL_SECONDS} seconds ($(($SYNC_INTERVAL_SECONDS / 3600)) hours)"
 echo ""
-
-# Setup cron job with the schedule from environment
-echo "$CRON_SCHEDULE cd /app && /usr/local/bin/python sync.py >> /var/log/ldap-openfga-sync/sync.log 2>&1" > /etc/cron.d/ldap-sync
-chmod 0644 /etc/cron.d/ldap-sync
-crontab /etc/cron.d/ldap-sync
-
-echo "Cron job configured:"
-crontab -l
 
 # Run sync immediately on startup
-echo ""
 echo "Running initial sync..."
-python sync.py
+python sync.py 2>&1 | tee -a /var/log/ldap-openfga-sync/sync.log
 
 echo ""
-echo "Initial sync complete. Starting cron daemon..."
+echo "Initial sync complete. Starting periodic sync loop..."
+echo "Next sync in ${SYNC_INTERVAL_SECONDS} seconds"
 
-# Start cron in foreground
-cron -f
+# Continuous loop with sleep
+while true; do
+    sleep "$SYNC_INTERVAL_SECONDS"
+    echo ""
+    echo "========================================"
+    echo "Starting scheduled sync at $(date)"
+    echo "========================================"
+    python sync.py 2>&1 | tee -a /var/log/ldap-openfga-sync/sync.log
+    echo "Sync complete. Next sync in ${SYNC_INTERVAL_SECONDS} seconds"
+done
 

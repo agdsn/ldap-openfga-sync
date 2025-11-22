@@ -2,8 +2,8 @@ apiVersion: v2
 name: ldap-openfga-sync
 description: A Helm chart for LDAP to OpenFGA group membership synchronization
 type: application
-version: 1.2.1
-appVersion: "1.2.1"
+version: 1.2.2
+appVersion: "1.2.2"
 keywords:
   - ldap
   - openfga

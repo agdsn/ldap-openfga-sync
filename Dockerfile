@@ -10,7 +10,6 @@ RUN apt-get update && \
     libldap2-dev \
     libsasl2-dev \
     gcc \
-    cron \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better layer caching
@@ -25,16 +24,15 @@ COPY *.py ./
 # Create log directory
 RUN mkdir -p /var/log/ldap-openfga-sync
 
-# Copy and setup entrypoint script (cron will be configured at runtime)
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # Expose volume for logs
 VOLUME ["/var/log/ldap-openfga-sync"]
 
-# Health check - verify the process is running
+# Health check - verify the entrypoint process is running
 HEALTHCHECK --interval=1h --timeout=10s --start-period=30s --retries=3 \
-    CMD pgrep cron || exit 1
+    CMD pgrep -f entrypoint.sh || exit 1
 
 # Run entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]

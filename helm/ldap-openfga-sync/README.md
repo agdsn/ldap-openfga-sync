@@ -141,7 +141,7 @@ When using `existingSecret`, the secret must contain these keys:
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `sync.dryRun` | Enable dry-run mode | `false` |
-| `sync.schedule` | Cron schedule | `0 */6 * * *` |
+| `sync.intervalSeconds` | Sync interval in seconds | `21600` (6 hours) |
 | `sync.groups` | List of groups to sync (empty = sync all) | `[]` |
 
 ### Persistence
@@ -299,24 +299,24 @@ helm install my-ldap-sync ldap-openfga-sync/ldap-openfga-sync \
   -f values.yaml
 ```
 
-### Custom Schedule
+### Custom Sync Interval
 
-The sync schedule is configurable via `sync.schedule` using standard cron format.
+The sync interval is configurable via `sync.intervalSeconds` in seconds.
 
 Run every 2 hours:
 ```bash
 helm install my-ldap-sync ldap-openfga-sync/ldap-openfga-sync \
-  --set sync.schedule="0 */2 * * *" \
+  --set sync.intervalSeconds=7200 \
   -f values.yaml
 ```
 
-Common schedules:
-- `0 */6 * * *` - Every 6 hours (default)
-- `0 */4 * * *` - Every 4 hours
-- `0 */2 * * *` - Every 2 hours
-- `0 */1 * * *` - Every hour
-- `0 0 * * *` - Daily at midnight
-- `*/30 * * * *` - Every 30 minutes
+Common intervals:
+- `21600` - Every 6 hours (default)
+- `14400` - Every 4 hours
+- `7200` - Every 2 hours
+- `3600` - Every hour
+- `1800` - Every 30 minutes
+- `86400` - Daily
 
 ## Upgrading
 
@@ -373,44 +373,6 @@ kubectl get pods -l app.kubernetes.io/name=ldap-openfga-sync
 
 # Describe pod
 kubectl describe pod $POD
-```
-
-## Troubleshooting
-
-### Pod not starting
-
-```bash
-# Check pod status
-kubectl describe pod $POD
-
-# Check events
-kubectl get events --sort-by=.metadata.creationTimestamp
-
-# Check logs
-kubectl logs $POD
-```
-
-### Connection issues
-
-```bash
-# Test LDAP connectivity
-kubectl exec $POD -- python test_connections.py
-
-# Check environment variables
-kubectl exec $POD -- env | grep -E "LDAP|OPENFGA"
-```
-
-### Sync not running
-
-```bash
-# Check cron is running
-kubectl exec $POD -- pgrep cron
-
-# Check cron schedule
-kubectl exec $POD -- crontab -l
-
-# Force a sync
-kubectl exec $POD -- python sync.py
 ```
 
 ## Development
