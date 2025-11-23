@@ -101,26 +101,26 @@ class OpenFGAAdapter(Adapter):
                             if key.relation != 'member':
                                 continue
 
-                            # Extract user email and group name
-                            user_str = key.user  # Format: "user:email@example.com"
-                            group_str = key.object  # Format: "group:groupname"
+                        # Extract username and group name
+                        user_str = key.user  # Format: "user:username"
+                        group_str = key.object  # Format: "group:groupname"
 
-                            if user_str.startswith('user:') and group_str.startswith('group:'):
-                                user_email = user_str.split(':', 1)[1]
-                                group_name = group_str.split(':', 1)[1]
+                        if user_str.startswith('user:') and group_str.startswith('group:'):
+                            user_username = user_str.split(':', 1)[1]
+                            group_name = group_str.split(':', 1)[1]
 
-                                # Only load memberships for groups in the sync list
-                                if self.sync_groups is not None and group_name not in self.sync_groups:
-                                    logger.debug(f"Skipping membership {user_email} -> {group_name} - group not in sync list")
-                                    continue
+                            # Only load memberships for groups in the sync list
+                            if self.sync_groups is not None and group_name not in self.sync_groups:
+                                logger.debug(f"Skipping membership {user_username} -> {group_name} - group not in sync list")
+                                continue
 
-                                membership = GroupMembership(
-                                    user_email=user_email,
-                                    group_name=group_name
-                                )
-                                self.add(membership)
-                                membership_count += 1
-                                logger.debug(f"Loaded membership: {user_email} -> {group_name}")
+                            membership = GroupMembership(
+                                user_username=user_username,
+                                group_name=group_name
+                            )
+                            self.add(membership)
+                            membership_count += 1
+                            logger.debug(f"Loaded membership: {user_username} -> {group_name}")
 
                 # Check if there are more pages
                 if hasattr(response, 'continuation_token') and response.continuation_token:
@@ -136,48 +136,48 @@ class OpenFGAAdapter(Adapter):
             logger.error(f"Failed to load data from OpenFGA: {e}")
             raise
 
-    async def add_membership(self, user_email: str, group_name: str):
+    async def add_membership(self, user_username: str, group_name: str):
         """Add a membership tuple to OpenFGA."""
         if self.dry_run:
-            logger.info(f"[DRY RUN] Would add: user:{user_email} member group:{group_name}")
+            logger.info(f"[DRY RUN] Would add: user:{user_username} member group:{group_name}")
             return
 
         try:
             body = ClientWriteRequest(
                 writes=[ClientTuple(
-                    user=f"user:{user_email}",
+                    user=f"user:{user_username}",
                     relation="member",
                     object=f"group:{group_name}"
                 )]
             )
 
             await self.client.write(body=body)
-            logger.info(f"Added membership: user:{user_email} member group:{group_name}")
+            logger.info(f"Added membership: user:{user_username} member group:{group_name}")
 
         except Exception as e:
-            logger.error(f"Failed to add membership {user_email} -> {group_name}: {e}")
+            logger.error(f"Failed to add membership {user_username} -> {group_name}: {e}")
             raise
 
-    async def remove_membership(self, user_email: str, group_name: str):
+    async def remove_membership(self, user_username: str, group_name: str):
         """Remove a membership tuple from OpenFGA."""
         if self.dry_run:
-            logger.info(f"[DRY RUN] Would remove: user:{user_email} member group:{group_name}")
+            logger.info(f"[DRY RUN] Would remove: user:{user_username} member group:{group_name}")
             return
 
         try:
             body = ClientWriteRequest(
                 deletes=[ClientTuple(
-                    user=f"user:{user_email}",
+                    user=f"user:{user_username}",
                     relation="member",
                     object=f"group:{group_name}"
                 )]
             )
 
             await self.client.write(body=body)
-            logger.info(f"Removed membership: user:{user_email} member group:{group_name}")
+            logger.info(f"Removed membership: user:{user_username} member group:{group_name}")
 
         except Exception as e:
-            logger.error(f"Failed to remove membership {user_email} -> {group_name}: {e}")
+            logger.error(f"Failed to remove membership {user_username} -> {group_name}: {e}")
             raise
 
     async def execute_pending_operations(self):
@@ -188,11 +188,11 @@ class OpenFGAAdapter(Adapter):
 
         logger.info(f"Executing {len(self.pending_operations)} pending operations")
 
-        for operation, user_email, group_name in self.pending_operations:
+        for operation, user_username, group_name in self.pending_operations:
             if operation == 'create':
-                await self.add_membership(user_email, group_name)
+                await self.add_membership(user_username, group_name)
             elif operation == 'delete':
-                await self.remove_membership(user_email, group_name)
+                await self.remove_membership(user_username, group_name)
 
         # Clear the pending operations
         self.pending_operations = []

@@ -16,6 +16,7 @@ objectClass: top
 cn: alice
 sn: Smith
 mail: alice@example.com
+uid: alice
 userPassword: password
 memberOf: cn=developers,ou=groups,dc=example,dc=com
 memberOf: cn=managers,ou=groups,dc=example,dc=com
@@ -29,6 +30,7 @@ objectClass: top
 cn: bob
 sn: Johnson
 mail: bob@example.com
+uid: bob
 userPassword: password
 memberOf: cn=developers,ou=groups,dc=example,dc=com
 memberOf: cn=not-in-openfga,ou=groups,dc=example,dc=com
@@ -41,6 +43,7 @@ objectClass: top
 cn: charlie
 sn: Williams
 mail: charlie@example.com
+uid: charlie
 userPassword: password
 memberOf: cn=operations,ou=groups,dc=example,dc=com
 
@@ -52,6 +55,7 @@ objectClass: top
 cn: dave
 sn: Brown
 mail: dave@example.com
+uid: dave
 userPassword: password
 memberOf: cn=operations,ou=groups,dc=example,dc=com
 
@@ -63,6 +67,7 @@ objectClass: top
 cn: eve
 sn: Davis
 mail: eve@example.com
+uid: eve
 userPassword: password
 memberOf: cn=qa-team,ou=groups,dc=example,dc=com
 

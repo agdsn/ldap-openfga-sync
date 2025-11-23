@@ -4,7 +4,7 @@ LDAP adapter for diffsync
 
 import os
 import logging
-from typing import Optional, Set
+from typing import Set
 import ldap
 from diffsync import Adapter
 
@@ -65,44 +65,6 @@ class LDAPAdapter(Adapter):
             self.ldap_conn.unbind_s()
             logger.info("Disconnected from LDAP")
 
-    def extract_email_from_dn(self, dn: str) -> Optional[str]:
-        """
-        Extract email from a user DN.
-        Tries to find 'mail=' attribute in the DN.
-        If not found, tries to extract from uid or cn and construct email.
-        """
-        try:
-            # Parse the DN
-            dn_parts = ldap.dn.str2dn(dn)
-
-            # Look for mail attribute
-            for rdn in dn_parts:
-                for attr, value, _ in rdn:
-                    if attr.lower() == 'mail':
-                        return value
-
-            # If we need to query LDAP for the user's email
-            if self.ldap_conn:
-                try:
-                    result = self.ldap_conn.search_s(
-                        dn,
-                        ldap.SCOPE_BASE,
-                        attrlist=['mail']
-                    )
-                    if result and len(result) > 0:
-                        _, attrs = result[0]
-                        if 'mail' in attrs and len(attrs['mail']) > 0:
-                            email = attrs['mail'][0]
-                            if isinstance(email, bytes):
-                                email = email.decode('utf-8')
-                            return email
-                except ldap.LDAPError as e:
-                    logger.warning(f"Could not query LDAP for email of {dn}: {e}")
-
-            return None
-        except Exception as e:
-            logger.warning(f"Failed to extract email from DN {dn}: {e}")
-            return None
 
     def load(self):
         """Load group memberships from LDAP."""
@@ -119,14 +81,14 @@ class LDAPAdapter(Adapter):
         else:
             self._load_using_member_attribute()
 
-    def _add_membership(self, email: str, group_name: str) -> None:
+    def _add_membership(self, username: str, group_name: str) -> None:
         """Helper to create and add a membership object."""
         membership = GroupMembership(
-            user_email=email,
+            user_username=username,
             group_name=group_name
         )
         self.add(membership)
-        logger.debug(f"Added membership: {email} -> {group_name}")
+        logger.debug(f"Added membership: {username} -> {group_name}")
 
     def _load_using_memberof(self):
         """Load group memberships using memberOf attribute (reverse lookup from users)."""
@@ -134,6 +96,7 @@ class LDAPAdapter(Adapter):
 
         user_base_dn = os.getenv("LDAP_USER_BASE_DN", os.getenv("LDAP_GROUP_BASE_DN"))
         group_base_dn = os.getenv("LDAP_GROUP_BASE_DN")
+        username_attr = os.getenv("LDAP_USERNAME_ATTRIBUTE", "uid")
         groups_to_sync = self._get_groups_to_sync()
         membership_count = 0
 
@@ -148,22 +111,22 @@ class LDAPAdapter(Adapter):
                         user_base_dn,
                         ldap.SCOPE_SUBTREE,
                         search_filter,
-                        ['mail']
+                        [username_attr]
                     )
 
                     for dn, attrs in results:
                         if not dn:
                             continue
 
-                        if 'mail' in attrs and len(attrs['mail']) > 0:
-                            email = attrs['mail'][0]
-                            if isinstance(email, bytes):
-                                email = email.decode('utf-8')
+                        if username_attr in attrs and len(attrs[username_attr]) > 0:
+                            username = attrs[username_attr][0]
+                            if isinstance(username, bytes):
+                                username = username.decode('utf-8')
 
-                            self._add_membership(email, group_name)
+                            self._add_membership(username, group_name)
                             membership_count += 1
                         else:
-                            logger.warning(f"User {dn} in group {group_name} has no email address")
+                            logger.warning(f"User {dn} in group {group_name} has no {username_attr} attribute")
 
                 except ldap.NO_SUCH_OBJECT:
                     logger.warning(f"Group DN not found: {group_dn}")
@@ -182,6 +145,7 @@ class LDAPAdapter(Adapter):
 
         base_dn = os.getenv("LDAP_GROUP_BASE_DN")
         member_attribute = os.getenv("LDAP_MEMBER_ATTRIBUTE", "member")
+        username_attr = os.getenv("LDAP_USERNAME_ATTRIBUTE", "uid")
         group_filter = os.getenv("LDAP_GROUP_FILTER", "(objectClass=groupOfNames)")
         groups_to_sync = self._get_groups_to_sync()
         membership_count = 0
@@ -219,16 +183,32 @@ class LDAPAdapter(Adapter):
                     if not isinstance(members, list):
                         members = [members]
 
-                    for member in members:
-                        if isinstance(member, bytes):
-                            member = member.decode('utf-8')
+                    for member_dn in members:
+                        if isinstance(member_dn, bytes):
+                            member_dn = member_dn.decode('utf-8')
 
-                        email = self.extract_email_from_dn(member)
-                        if email:
-                            self._add_membership(email, group_name)
-                            membership_count += 1
-                        else:
-                            logger.warning(f"Could not extract email from member DN: {member}")
+                        # Query the member DN for the username attribute
+                        try:
+                            user_result = self.ldap_conn.search_s(
+                                member_dn,
+                                ldap.SCOPE_BASE,
+                                attrlist=[username_attr]
+                            )
+                            if user_result and len(user_result) > 0:
+                                _, user_attrs = user_result[0]
+                                if username_attr in user_attrs and len(user_attrs[username_attr]) > 0:
+                                    username = user_attrs[username_attr][0]
+                                    if isinstance(username, bytes):
+                                        username = username.decode('utf-8')
+
+                                    self._add_membership(username, group_name)
+                                    membership_count += 1
+                                else:
+                                    logger.warning(f"User {member_dn} has no {username_attr} attribute")
+                            else:
+                                logger.warning(f"Could not find user {member_dn}")
+                        except ldap.LDAPError as e:
+                            logger.warning(f"Could not query {username_attr} for {member_dn}: {e}")
 
             logger.info(f"Loaded {membership_count} memberships from LDAP using member attribute")
             if skipped_groups > 0:

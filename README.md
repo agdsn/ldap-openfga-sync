@@ -7,7 +7,7 @@ This script synchronizes group memberships from LDAP to OpenFGA using the [diffs
 - Syncs group memberships from LDAP to OpenFGA
 - Uses diffsync library to calculate and apply only the necessary changes
 - Supports dry-run mode to preview changes before applying them
-- Users are identified by their email addresses
+- Users are identified by a configurable LDAP attribute (default: `uid`)
 - Comprehensive logging
 - Runs as non-root user for enhanced security
 
@@ -62,6 +62,7 @@ Edit the `.env` file with your settings:
 - `LDAP_USE_MEMBEROF`: Use `memberOf` attribute for reverse lookup (default: `false`)
   - **When true**: Queries users for `memberOf` attribute. Recommended for FreeIPA/Active Directory. Supports inherited/nested groups automatically.
   - **When false**: Queries groups for `member` attribute. Works with any LDAP. Direct members only.
+- `LDAP_USERNAME_ATTRIBUTE`: LDAP attribute to use as username identifier (default: `uid`). This attribute is read from LDAP users and used to identify them in OpenFGA. Common values: `uid`, `mail`, `preferredUsername`, `sAMAccountName`
 
 ### OpenFGA Configuration
 
@@ -156,10 +157,10 @@ This will verify:
 
 ## How It Works
 
-1. **Connect to OpenFGA**: The script first connects to OpenFGA and fetches all existing groups
-2. **Connect to LDAP**: Then connects to LDAP and queries for group memberships
-3. **Filter Groups**: Only processes groups that exist in OpenFGA
-4. **Extract Emails**: Extracts user email addresses from LDAP member DNs
+1. **Connect to OpenFGA**: The script connects to OpenFGA 
+2. **Connect to LDAP**: Connects to LDAP and queries for group memberships
+3. **Filter Groups**: Only processes configured groups (or all groups if SYNC_GROUPS is empty)
+4. **Extract Usernames**: Queries the configured username attribute (default: `preferredUsername`) from LDAP users
 5. **Load Data**: Loads memberships from both LDAP and OpenFGA into diffsync adapters
 6. **Calculate Diff**: Uses diffsync to automatically calculate the differences
 7. **Apply Changes**: Uses diffsync's built-in CRUD operations (`create()` and `delete()` methods in the model) to queue changes
@@ -176,22 +177,20 @@ The sync uses diffsync's native sync mechanism (`sync_from()`) which automatical
 The script expects the following OpenFGA relationship structure:
 
 ```
-user:email@example.com member group:groupname
+user:username member group:groupname
 ```
 
 Where:
-- User type: `user` (identified by email)
+- User type: `user` (identified by username from LDAP, configurable via `LDAP_USERNAME_ATTRIBUTE`)
 - Relation: `member`
 - Object type: `group` (identified by group name)
 
 ## LDAP Requirements
 
 - Groups must have a `cn` attribute (used as the group name)
-- Groups must have a member attribute (configurable, default: `member`)
-- Users must be identifiable by email:
-  - Either via a `mail` attribute in their DN
-  - Or by querying the user object for the `mail` attribute
-
+- Groups must have a member attribute (configurable via `LDAP_MEMBER_ATTRIBUTE`, default: `member`) when using member attribute mode
+- Users must have the configured username attribute (configurable via `LDAP_USERNAME_ATTRIBUTE`, default: `uid`)
+  - Common attributes: `uid`, `mail`
 A comprehensive test suite is included with Docker Compose environment:
 
 ```bash

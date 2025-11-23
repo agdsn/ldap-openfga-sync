@@ -117,18 +117,42 @@ class TestEnvironment:
         )
         self.openfga_client = OpenFgaClient(config)
 
+    async def _read_all_tuples_paginated(self):
+        """Helper method to read all tuples with pagination"""
+        all_tuples = []
+        continuation_token = None
+        page_size = 100
+
+        while True:
+            body = ReadRequestTupleKey()
+            options = {"page_size": page_size}
+            if continuation_token:
+                options["continuation_token"] = continuation_token
+
+            response = await self.openfga_client.read(body=body, options=options)
+
+            if hasattr(response, 'tuples') and response.tuples:
+                all_tuples.extend(response.tuples)
+
+            # Check if there are more pages
+            if hasattr(response, 'continuation_token') and response.continuation_token:
+                continuation_token = response.continuation_token
+            else:
+                break
+
+        return all_tuples
+
     async def clear_openfga_tuples(self):
         """Remove all tuples from OpenFGA"""
         logger.info("Clearing OpenFGA tuples...")
 
-        # Read all tuples
-        body = ReadRequestTupleKey()
-        response = await self.openfga_client.read(body=body)
+        # Read all tuples using pagination helper
+        all_tuples = await self._read_all_tuples_paginated()
 
-        if hasattr(response, 'tuples') and response.tuples:
+        if all_tuples:
             # Delete all tuples
             deletes = []
-            for tuple_data in response.tuples:
+            for tuple_data in all_tuples:
                 if hasattr(tuple_data, 'key'):
                     key = tuple_data.key
                     deletes.append(ClientTuple(
@@ -138,26 +162,17 @@ class TestEnvironment:
                     ))
 
             if deletes:
-                body = ClientWriteRequest(deletes=deletes)
-                await self.openfga_client.write(body=body)
+                # Delete in batches to avoid request size limits
+                batch_size = 100
+                for i in range(0, len(deletes), batch_size):
+                    batch = deletes[i:i + batch_size]
+                    delete_body = ClientWriteRequest(deletes=batch)
+                    await self.openfga_client.write(body=delete_body)
+
                 logger.info(f"Deleted {len(deletes)} tuples")
+        else:
+            logger.info("No tuples to delete")
 
-    async def add_openfga_groups(self, groups: List[str], admin_email: str = "admin@example.com"):
-        """Create groups in OpenFGA by adding admin relationships"""
-        logger.info(f"Adding {len(groups)} groups to OpenFGA...")
-
-        writes = []
-        for group in groups:
-            writes.append(ClientTuple(
-                user=f"user:{admin_email}",
-                relation="admin",
-                object=f"group:{group}"
-            ))
-
-        if writes:
-            body = ClientWriteRequest(writes=writes)
-            await self.openfga_client.write(body=body)
-            logger.info(f"✅ Added {len(groups)} groups")
 
     async def add_openfga_memberships(self, memberships: List[Dict[str, str]]):
         """Add specific memberships to OpenFGA"""
@@ -166,7 +181,7 @@ class TestEnvironment:
         writes = []
         for m in memberships:
             writes.append(ClientTuple(
-                user=f"user:{m['email']}",
+                user=f"user:{m['username']}",
                 relation="member",
                 object=f"group:{m['group']}"
             ))
@@ -177,20 +192,20 @@ class TestEnvironment:
             logger.info(f"✅ Added {len(memberships)} memberships")
 
     async def get_openfga_memberships(self) -> Set[tuple]:
-        """Get all member relationships from OpenFGA"""
-        body = ReadRequestTupleKey()
-        response = await self.openfga_client.read(body=body)
-
+        """Get all group memberships from OpenFGA"""
         memberships = set()
-        if hasattr(response, 'tuples') and response.tuples:
-            for tuple_data in response.tuples:
-                if hasattr(tuple_data, 'key'):
-                    key = tuple_data.key
-                    # Only get member relationships
-                    if key.relation == 'member' and key.user.startswith('user:') and key.object.startswith('group:'):
-                        email = key.user.split(':', 1)[1]
-                        group = key.object.split(':', 1)[1]
-                        memberships.add((email, group))
+
+        # Read all tuples using pagination helper
+        all_tuples = await self._read_all_tuples_paginated()
+
+        for tuple_data in all_tuples:
+            if hasattr(tuple_data, 'key'):
+                key = tuple_data.key
+                # Only get member relationships
+                if key.relation == 'member' and key.user.startswith('user:') and key.object.startswith('group:'):
+                    username = key.user.split(':', 1)[1]
+                    group = key.object.split(':', 1)[1]
+                    memberships.add((username, group))
 
         return memberships
 
@@ -203,6 +218,7 @@ class TestEnvironment:
         memberships = set()
         base_dn = os.getenv("LDAP_GROUP_BASE_DN")
         group_filter = os.getenv("LDAP_GROUP_FILTER")
+        username_attr = os.getenv("LDAP_USERNAME_ATTRIBUTE", "uid")
 
         results = self.ldap_conn.search_s(base_dn, ldap.SCOPE_SUBTREE, group_filter, ['cn', 'member'])
 
@@ -223,16 +239,16 @@ class TestEnvironment:
 
                 for member_dn in members:
                     member_dn = member_dn.decode('utf-8')
-                    # Get user's email
+                    # Get user's username attribute
                     try:
                         user_result = self.ldap_conn.search_s(
                             member_dn,
                             ldap.SCOPE_BASE,
-                            attrlist=['mail']
+                            attrlist=[username_attr]
                         )
-                        if user_result and 'mail' in user_result[0][1]:
-                            email = user_result[0][1]['mail'][0].decode('utf-8')
-                            memberships.add((email, group_name))
+                        if user_result and username_attr in user_result[0][1]:
+                            username = user_result[0][1][username_attr][0].decode('utf-8')
+                            memberships.add((username, group_name))
                     except:
                         pass
 
@@ -310,12 +326,12 @@ class TestRunner:
         # Set groups to sync
         self.set_sync_groups(['developers', 'operations'])
 
-        # Create memberships
+        # Create memberships (using usernames as default LDAP_USERNAME_ATTRIBUTE is uid)
         await self.env.add_openfga_memberships([
-            {'email': 'alice@example.com', 'group': 'developers'},
-            {'email': 'bob@example.com', 'group': 'developers'},
-            {'email': 'charlie@example.com', 'group': 'operations'},
-            {'email': 'dave@example.com', 'group': 'operations'},
+            {'username': 'alice', 'group': 'developers'},
+            {'username': 'bob', 'group': 'developers'},
+            {'username': 'charlie', 'group': 'operations'},
+            {'username': 'dave', 'group': 'operations'},
         ])
 
         before = await self.env.get_openfga_memberships()
@@ -338,7 +354,7 @@ class TestRunner:
 
         # Create partial memberships
         await self.env.add_openfga_memberships([
-            {'email': 'alice@example.com', 'group': 'developers'},
+            {'username': 'alice', 'group': 'developers'},
             # Missing bob in developers
             # Missing charlie and dave in operations
         ])
@@ -354,10 +370,10 @@ class TestRunner:
 
         # Should have added bob, charlie, and dave
         expected = {
-            ('alice@example.com', 'developers'),
-            ('bob@example.com', 'developers'),
-            ('charlie@example.com', 'operations'),
-            ('dave@example.com', 'operations'),
+            ('alice', 'developers'),
+            ('bob', 'developers'),
+            ('charlie', 'operations'),
+            ('dave', 'operations'),
         }
 
         assert after == expected, f"Expected {expected}, got {after}"
@@ -371,10 +387,10 @@ class TestRunner:
 
         # Create extra memberships not in LDAP
         await self.env.add_openfga_memberships([
-            {'email': 'alice@example.com', 'group': 'developers'},
-            {'email': 'bob@example.com', 'group': 'developers'},
-            {'email': 'charlie@example.com', 'group': 'developers'},  # Not in LDAP
-            {'email': 'eve@example.com', 'group': 'developers'},      # Not in LDAP
+            {'username': 'alice', 'group': 'developers'},
+            {'username': 'bob', 'group': 'developers'},
+            {'username': 'charlie', 'group': 'developers'},  # Not in LDAP
+            {'username': 'eve', 'group': 'developers'},      # Not in LDAP
         ])
 
         before = await self.env.get_openfga_memberships()
@@ -388,8 +404,8 @@ class TestRunner:
 
         # Should have removed charlie and eve from developers
         expected = {
-            ('alice@example.com', 'developers'),
-            ('bob@example.com', 'developers'),
+            ('alice', 'developers'),
+            ('bob', 'developers'),
         }
 
         assert after == expected, f"Expected {expected}, got {after}"
@@ -403,11 +419,11 @@ class TestRunner:
 
         # Create some correct, some extra, some missing
         await self.env.add_openfga_memberships([
-            {'email': 'alice@example.com', 'group': 'developers'},     # Correct
-            {'email': 'charlie@example.com', 'group': 'developers'},   # Should be removed
+            {'username': 'alice', 'group': 'developers'},     # Correct
+            {'username': 'charlie', 'group': 'developers'},   # Should be removed
             # Missing bob in developers
-            {'email': 'charlie@example.com', 'group': 'operations'},   # Correct
-            {'email': 'dave@example.com', 'group': 'operations'},      # Correct
+            {'username': 'charlie', 'group': 'operations'},   # Correct
+            {'username': 'dave', 'group': 'operations'},      # Correct
             # Missing alice in managers
         ])
 
@@ -421,11 +437,11 @@ class TestRunner:
         logger.info(f"After sync: {after}")
 
         expected = {
-            ('alice@example.com', 'developers'),
-            ('bob@example.com', 'developers'),
-            ('charlie@example.com', 'operations'),
-            ('dave@example.com', 'operations'),
-            ('alice@example.com', 'managers'),
+            ('alice', 'developers'),
+            ('bob', 'developers'),
+            ('charlie', 'operations'),
+            ('dave', 'operations'),
+            ('alice', 'managers'),
         }
 
         assert after == expected, f"Expected {expected}, got {after}"
@@ -447,11 +463,11 @@ class TestRunner:
         logger.info(f"After sync: {after}")
 
         # Should only have developers and operations, not managers/qa-team/not-in-openfga
-        for email, group in after:
+        for username, group in after:
             assert group in ['developers', 'operations'], f"Unexpected group {group} was synced"
 
         # Verify we have the expected groups
-        groups_synced = {group for email, group in after}
+        groups_synced = {group for username, group in after}
         assert groups_synced == {'developers', 'operations'}, f"Expected developers and operations, got {groups_synced}"
 
     async def test_empty_ldap_group(self):
@@ -463,9 +479,9 @@ class TestRunner:
 
         # Create a group with members in OpenFGA
         await self.env.add_openfga_memberships([
-            {'email': 'alice@example.com', 'group': 'qa-team'},  # Not in LDAP for this group
-            {'email': 'bob@example.com', 'group': 'qa-team'},    # Not in LDAP for this group
-            {'email': 'eve@example.com', 'group': 'qa-team'},    # This one IS in LDAP
+            {'username': 'alice', 'group': 'qa-team'},  # Not in LDAP for this group
+            {'username': 'bob', 'group': 'qa-team'},    # Not in LDAP for this group
+            {'username': 'eve', 'group': 'qa-team'},    # This one IS in LDAP
         ])
 
         before = await self.env.get_openfga_memberships()
@@ -478,7 +494,7 @@ class TestRunner:
         logger.info(f"After sync: {after}")
 
         # Should only have eve (the actual member in LDAP)
-        expected = {('eve@example.com', 'qa-team')}
+        expected = {('eve', 'qa-team')}
         assert after == expected, f"Expected {expected}, got {after}"
 
     async def test_sync_all_groups(self):
@@ -504,7 +520,7 @@ class TestRunner:
         assert after == expected, f"Expected all groups to be synced. Expected {expected}, got {after}"
 
         # Verify we have all the different groups
-        groups_synced = {group for email, group in after}
+        groups_synced = {group for username, group in after}
         logger.info(f"Groups synced: {groups_synced}")
 
         # Should include all groups from LDAP
@@ -524,13 +540,13 @@ class TestRunner:
         # Add memberships for groups both in and NOT in the sync list
         await self.env.add_openfga_memberships([
             # Groups in sync list
-            {'email': 'alice@example.com', 'group': 'developers'},
-            {'email': 'bob@example.com', 'group': 'developers'},
-            {'email': 'charlie@example.com', 'group': 'operations'},
+            {'username': 'alice', 'group': 'developers'},
+            {'username': 'bob', 'group': 'developers'},
+            {'username': 'charlie', 'group': 'operations'},
             # Groups NOT in sync list - these should remain untouched
-            {'email': 'alice@example.com', 'group': 'managers'},
-            {'email': 'eve@example.com', 'group': 'qa-team'},
-            {'email': 'frank@example.com', 'group': 'external-group'},
+            {'username': 'alice', 'group': 'managers'},
+            {'username': 'eve', 'group': 'qa-team'},
+            {'username': 'frank', 'group': 'external-group'},
         ])
 
         before = await self.env.get_openfga_memberships()
@@ -543,18 +559,18 @@ class TestRunner:
         logger.info(f"After sync: {after}")
 
         # Groups in sync list should be synced correctly
-        assert ('alice@example.com', 'developers') in after
-        assert ('bob@example.com', 'developers') in after
-        assert ('charlie@example.com', 'operations') in after
-        assert ('dave@example.com', 'operations') in after  # Should be added from LDAP
+        assert ('alice', 'developers') in after
+        assert ('bob', 'developers') in after
+        assert ('charlie', 'operations') in after
+        assert ('dave', 'operations') in after  # Should be added from LDAP
 
         # Groups NOT in sync list should remain completely untouched
-        assert ('alice@example.com', 'managers') in after, "managers group membership was removed but shouldn't be"
-        assert ('eve@example.com', 'qa-team') in after, "qa-team group membership was removed but shouldn't be"
-        assert ('frank@example.com', 'external-group') in after, "external-group membership was removed but shouldn't be"
+        assert ('alice', 'managers') in after, "managers group membership was removed but shouldn't be"
+        assert ('eve', 'qa-team') in after, "qa-team group membership was removed but shouldn't be"
+        assert ('frank', 'external-group') in after, "external-group membership was removed but shouldn't be"
 
         # Verify the untouched groups are still there
-        groups_in_openfga = {group for email, group in after}
+        groups_in_openfga = {group for username, group in after}
         assert 'managers' in groups_in_openfga, "managers group should still exist"
         assert 'qa-team' in groups_in_openfga, "qa-team group should still exist"
         assert 'external-group' in groups_in_openfga, "external-group should still exist"
@@ -578,10 +594,10 @@ class TestRunner:
 
         # Verify correct memberships
         expected = {
-            ('alice@example.com', 'developers'),
-            ('bob@example.com', 'developers'),
-            ('charlie@example.com', 'operations'),
-            ('dave@example.com', 'operations'),
+            ('alice', 'developers'),
+            ('bob', 'developers'),
+            ('charlie', 'operations'),
+            ('dave', 'operations'),
         }
 
         assert after == expected, f"Member attribute mode failed. Expected {expected}, got {after}"
@@ -607,10 +623,10 @@ class TestRunner:
 
         # Verify correct memberships (should be same as member mode for test data)
         expected = {
-            ('alice@example.com', 'developers'),
-            ('bob@example.com', 'developers'),
-            ('charlie@example.com', 'operations'),
-            ('dave@example.com', 'operations'),
+            ('alice', 'developers'),
+            ('bob', 'developers'),
+            ('charlie', 'operations'),
+            ('dave', 'operations'),
         }
 
         assert after == expected, f"MemberOf mode failed. Expected {expected}, got {after}"
@@ -666,8 +682,8 @@ class TestRunner:
         for i in range(num_entries):
             # Create memberships across different groups and users
             group = ['developers', 'operations', 'managers'][i % 3]
-            email = f"testuser{i}@example.com"
-            memberships.append({'email': email, 'group': group})
+            username = f"testuser{i}"
+            memberships.append({'username': username, 'group': group})
 
         # Add memberships in batches
         for i in range(0, num_entries, batch_size):
@@ -697,6 +713,60 @@ class TestRunner:
         finally:
             # Properly close the OpenFGA client to avoid unclosed connector warnings
             await openfga_adapter.close()
+
+    async def test_username_attribute_configuration(self):
+        """Test 14: Verify LDAP_USERNAME_ATTRIBUTE configuration works"""
+        await self.env.clear_openfga_tuples()
+
+        # Test with default (uid) - should get simple usernames
+        os.environ['LDAP_USERNAME_ATTRIBUTE'] = 'uid'
+        os.environ['LDAP_USE_MEMBEROF'] = 'false'
+        self.set_sync_groups(['developers'])
+
+        await sync_ldap_to_openfga()
+
+        result_uid = await self.env.get_openfga_memberships()
+        logger.info(f"Result with uid: {result_uid}")
+
+        # Filter to only real test users (not pagination test users)
+        real_users_uid = {(u, g) for u, g in result_uid if not u.startswith('testuser')}
+        logger.info(f"Real users with uid: {real_users_uid}")
+
+        # Should have alice and bob with their simple usernames (uid attribute)
+        assert ('alice', 'developers') in real_users_uid, "alice not found in uid results"
+        assert ('bob', 'developers') in real_users_uid, "bob not found in uid results"
+
+        # Clear and test with 'mail' attribute - should get email addresses
+        await self.env.clear_openfga_tuples()
+        os.environ['LDAP_USERNAME_ATTRIBUTE'] = 'mail'
+        self.set_sync_groups(['developers'])
+
+        await sync_ldap_to_openfga()
+
+        result_mail = await self.env.get_openfga_memberships()
+        logger.info(f"Result with mail: {result_mail}")
+
+        # Filter to only real test users (not pagination test users)
+        real_users_mail = {(u, g) for u, g in result_mail if not u.startswith('testuser')}
+        logger.info(f"Real users with mail: {real_users_mail}")
+
+        # Should have alice and bob with their email addresses (mail attribute)
+        assert ('alice@example.com', 'developers') in real_users_mail, "alice@example.com not found in mail results"
+        assert ('bob@example.com', 'developers') in real_users_mail, "bob@example.com not found in mail results"
+
+        # Results should be different - uid gives usernames, mail gives emails
+        assert real_users_uid != real_users_mail, \
+            "Results should differ when uid (usernames) and mail (emails) are different"
+
+        assert len(real_users_uid) == len(real_users_mail) == 2, \
+            "Both should have 2 users (alice and bob)"
+
+        logger.info("✅ LDAP_USERNAME_ATTRIBUTE configuration works correctly")
+        logger.info(f"   uid mode: {real_users_uid}")
+        logger.info(f"   mail mode: {real_users_mail}")
+
+        # Reset to default
+        os.environ['LDAP_USERNAME_ATTRIBUTE'] = 'uid'
 
     def print_summary(self):
         """Print test summary"""
@@ -741,6 +811,7 @@ async def main():
         await runner.run_test("MemberOf mode works correctly", runner.test_memberof_mode)
         await runner.run_test("Both modes produce identical results", runner.test_both_modes_produce_same_result)
         await runner.run_test("Pagination works with many entries", runner.test_pagination_many_entries)
+        await runner.run_test("LDAP_USERNAME_ATTRIBUTE configuration works", runner.test_username_attribute_configuration)
 
         # Print summary
         runner.print_summary()
