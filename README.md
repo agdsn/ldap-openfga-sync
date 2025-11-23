@@ -62,7 +62,7 @@ Edit the `.env` file with your settings:
 - `LDAP_USE_MEMBEROF`: Use `memberOf` attribute for reverse lookup (default: `false`)
   - **When true**: Queries users for `memberOf` attribute. Recommended for FreeIPA/Active Directory. Supports inherited/nested groups automatically.
   - **When false**: Queries groups for `member` attribute. Works with any LDAP. Direct members only.
-- `LDAP_USERNAME_ATTRIBUTE`: LDAP attribute to use as username identifier (default: `uid`). This attribute is read from LDAP users and used to identify them in OpenFGA. Common values: `uid`, `mail`, `preferredUsername`, `sAMAccountName`
+- `LDAP_USERNAME_ATTRIBUTE`: LDAP attribute to use as username identifier (default: `uid`). This attribute is read from LDAP users and used to identify them in OpenFGA. Common values: `uid`, `mail`
 
 ### OpenFGA Configuration
 
