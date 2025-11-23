@@ -65,9 +65,18 @@ ldap:
   bindDn: "cn=admin,dc=example,dc=com"
   bindPassword: ""
   groupBaseDn: "ou=groups,dc=example,dc=com"
+  # User base DN (for memberOf queries, defaults to groupBaseDn if not set)
+  # For FreeIPA: cn=users,cn=accounts,dc=example,dc=com
+  # Only used when useMemberOf is true
+  userBaseDn: ""
   groupFilter: "(objectClass=groupOfNames)"
+  # Member attribute (only used when useMemberOf is false)
   memberAttribute: "member"
   useTls: false
+  # Use memberOf attribute for reverse lookup (recommended for FreeIPA/Active Directory)
+  # When true: Queries users for memberOf attribute (supports inherited/nested groups)
+  # When false: Queries groups for member attribute (direct members only)
+  useMemberOf: false
   # Custom CA certificate for LDAP TLS verification
   # Provide either caCert (inline) or existingCaCertSecret
   caCert: ""

@@ -65,7 +65,6 @@ class LDAPAdapter(Adapter):
             self.ldap_conn.unbind_s()
             logger.info("Disconnected from LDAP")
 
-
     def extract_email_from_dn(self, dn: str) -> Optional[str]:
         """
         Extract email from a user DN.
@@ -112,12 +111,83 @@ class LDAPAdapter(Adapter):
         if not self.ldap_conn:
             self.connect_ldap()
 
-        base_dn = os.getenv("LDAP_GROUP_BASE_DN")
-        group_filter = os.getenv("LDAP_GROUP_FILTER", "(objectClass=groupOfNames)")
-        member_attribute = os.getenv("LDAP_MEMBER_ATTRIBUTE", "member")
+        # Check which lookup method to use
+        use_memberof = os.getenv("LDAP_USE_MEMBEROF", "false").lower() == "true"
+
+        if use_memberof:
+            self._load_using_memberof()
+        else:
+            self._load_using_member_attribute()
+
+    def _add_membership(self, email: str, group_name: str) -> None:
+        """Helper to create and add a membership object."""
+        membership = GroupMembership(
+            user_email=email,
+            group_name=group_name
+        )
+        self.add(membership)
+        logger.debug(f"Added membership: {email} -> {group_name}")
+
+    def _load_using_memberof(self):
+        """Load group memberships using memberOf attribute (reverse lookup from users)."""
+        logger.info("Using memberOf attribute for group membership lookup")
+
+        user_base_dn = os.getenv("LDAP_USER_BASE_DN", os.getenv("LDAP_GROUP_BASE_DN"))
+        group_base_dn = os.getenv("LDAP_GROUP_BASE_DN")
+        groups_to_sync = self._get_groups_to_sync()
+        membership_count = 0
 
         try:
-            # Search for all groups
+            for group_name in groups_to_sync:
+                logger.info(f"Processing group: {group_name}")
+                group_dn = f"cn={group_name},{group_base_dn}"
+                search_filter = f"(memberOf={group_dn})"
+
+                try:
+                    results = self.ldap_conn.search_s(
+                        user_base_dn,
+                        ldap.SCOPE_SUBTREE,
+                        search_filter,
+                        ['mail']
+                    )
+
+                    for dn, attrs in results:
+                        if not dn:
+                            continue
+
+                        if 'mail' in attrs and len(attrs['mail']) > 0:
+                            email = attrs['mail'][0]
+                            if isinstance(email, bytes):
+                                email = email.decode('utf-8')
+
+                            self._add_membership(email, group_name)
+                            membership_count += 1
+                        else:
+                            logger.warning(f"User {dn} in group {group_name} has no email address")
+
+                except ldap.NO_SUCH_OBJECT:
+                    logger.warning(f"Group DN not found: {group_dn}")
+                except ldap.LDAPError as e:
+                    logger.warning(f"Error searching for members of {group_name}: {e}")
+
+            logger.info(f"Loaded {membership_count} memberships from LDAP using memberOf")
+
+        except ldap.LDAPError as e:
+            logger.error(f"LDAP search failed: {e}")
+            raise
+
+    def _load_using_member_attribute(self):
+        """Load group memberships using member attribute (forward lookup from groups)."""
+        logger.info("Using member attribute for group membership lookup")
+
+        base_dn = os.getenv("LDAP_GROUP_BASE_DN")
+        member_attribute = os.getenv("LDAP_MEMBER_ATTRIBUTE", "member")
+        group_filter = os.getenv("LDAP_GROUP_FILTER", "(objectClass=groupOfNames)")
+        groups_to_sync = self._get_groups_to_sync()
+        membership_count = 0
+        skipped_groups = 0
+
+        try:
             results = self.ldap_conn.search_s(
                 base_dn,
                 ldap.SCOPE_SUBTREE,
@@ -125,33 +195,25 @@ class LDAPAdapter(Adapter):
                 [member_attribute, 'cn']
             )
 
-            membership_count = 0
-            skipped_groups = 0
-
             for dn, attrs in results:
-                if not dn:  # Skip search references
+                if not dn:
                     continue
 
-                # Get group name (cn)
-                group_name = None
-                if 'cn' in attrs and len(attrs['cn']) > 0:
-                    group_name = attrs['cn'][0]
-                    if isinstance(group_name, bytes):
-                        group_name = group_name.decode('utf-8')
-
-                if not group_name:
+                if 'cn' not in attrs or len(attrs['cn']) == 0:
                     logger.warning(f"Group {dn} has no cn attribute, skipping")
                     continue
 
-                # Only process groups that are configured to sync (if sync_groups is specified)
-                if self.sync_groups is not None and group_name not in self.sync_groups:
+                group_name = attrs['cn'][0]
+                if isinstance(group_name, bytes):
+                    group_name = group_name.decode('utf-8')
+
+                if group_name not in groups_to_sync:
                     logger.debug(f"Skipping group '{group_name}' - not in SYNC_GROUPS config")
                     skipped_groups += 1
                     continue
 
                 logger.info(f"Processing group: {group_name}")
 
-                # Get members
                 if member_attribute in attrs:
                     members = attrs[member_attribute]
                     if not isinstance(members, list):
@@ -161,26 +223,48 @@ class LDAPAdapter(Adapter):
                         if isinstance(member, bytes):
                             member = member.decode('utf-8')
 
-                        # Extract email from member DN
                         email = self.extract_email_from_dn(member)
-
                         if email:
-                            # Create membership object
-                            membership = GroupMembership(
-                                user_email=email,
-                                group_name=group_name
-                            )
-                            self.add(membership)
+                            self._add_membership(email, group_name)
                             membership_count += 1
-                            logger.debug(f"Added membership: {email} -> {group_name}")
                         else:
                             logger.warning(f"Could not extract email from member DN: {member}")
 
-            logger.info(f"Loaded {membership_count} memberships from LDAP")
+            logger.info(f"Loaded {membership_count} memberships from LDAP using member attribute")
             if skipped_groups > 0:
                 logger.info(f"Skipped {skipped_groups} groups not in SYNC_GROUPS config")
 
         except ldap.LDAPError as e:
             logger.error(f"LDAP search failed: {e}")
+            raise
+
+    def _get_groups_to_sync(self) -> Set[str]:
+        """Get the set of groups to sync (either from config or by discovering all groups)."""
+        if self.sync_groups is not None:
+            return self.sync_groups
+
+        # If no specific groups configured, discover all groups
+        logger.info("No SYNC_GROUPS configured - discovering all groups")
+        group_base_dn = os.getenv("LDAP_GROUP_BASE_DN")
+        group_filter = os.getenv("LDAP_GROUP_FILTER", "(objectClass=groupOfNames)")
+
+        try:
+            results = self.ldap_conn.search_s(
+                group_base_dn,
+                ldap.SCOPE_SUBTREE,
+                group_filter,
+                ['cn']
+            )
+            groups_to_sync = set()
+            for dn, attrs in results:
+                if dn and 'cn' in attrs:
+                    group_name = attrs['cn'][0]
+                    if isinstance(group_name, bytes):
+                        group_name = group_name.decode('utf-8')
+                    groups_to_sync.add(group_name)
+            logger.info(f"Found {len(groups_to_sync)} groups to sync")
+            return groups_to_sync
+        except ldap.LDAPError as e:
+            logger.error(f"Failed to discover groups: {e}")
             raise
 

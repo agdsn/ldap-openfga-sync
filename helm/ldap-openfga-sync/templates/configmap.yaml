@@ -9,9 +9,13 @@ data:
   LDAP_SERVER: {{ .Values.ldap.server | quote }}
   LDAP_BIND_DN: {{ .Values.ldap.bindDn | quote }}
   LDAP_GROUP_BASE_DN: {{ .Values.ldap.groupBaseDn | quote }}
+  {{- if .Values.ldap.userBaseDn }}
+  LDAP_USER_BASE_DN: {{ .Values.ldap.userBaseDn | quote }}
+  {{- end }}
   LDAP_GROUP_FILTER: {{ .Values.ldap.groupFilter | quote }}
   LDAP_MEMBER_ATTRIBUTE: {{ .Values.ldap.memberAttribute | quote }}
   LDAP_USE_TLS: {{ .Values.ldap.useTls | quote }}
+  LDAP_USE_MEMBEROF: {{ .Values.ldap.useMemberOf | quote }}
   {{- if or .Values.ldap.caCert .Values.ldap.existingCaCertSecret }}
   LDAP_CA_CERT_FILE: "/etc/ldap/certs/ca.crt"
   {{- end }}

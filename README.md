@@ -54,10 +54,14 @@ Edit the `.env` file with your settings:
 - `LDAP_BIND_DN`: DN to bind with (e.g., `cn=admin,dc=example,dc=com`)
 - `LDAP_BIND_PASSWORD`: Password for the bind DN
 - `LDAP_GROUP_BASE_DN`: Base DN to search for groups (e.g., `ou=groups,dc=example,dc=com`)
-- `LDAP_GROUP_FILTER`: LDAP filter to find groups (default: `(objectClass=groupOfNames)`)
-- `LDAP_MEMBER_ATTRIBUTE`: Attribute containing group members (default: `member`)
+- `LDAP_USER_BASE_DN`: Base DN where users are located (for `memberOf` queries). Only used when `LDAP_USE_MEMBEROF=true`. Defaults to `LDAP_GROUP_BASE_DN` if not set. For FreeIPA: `cn=users,cn=accounts,dc=example,dc=com`
+- `LDAP_GROUP_FILTER`: LDAP filter to find groups when discovering all groups (default: `(objectClass=groupOfNames)`)
+- `LDAP_MEMBER_ATTRIBUTE`: Attribute containing group members. Only used when `LDAP_USE_MEMBEROF=false` (default: `member`)
 - `LDAP_USE_TLS`: Whether to use TLS (true/false)
 - `LDAP_CA_CERT_FILE`: Path to custom CA certificate file for TLS verification (optional, for self-signed certificates)
+- `LDAP_USE_MEMBEROF`: Use `memberOf` attribute for reverse lookup (default: `false`)
+  - **When true**: Queries users for `memberOf` attribute. Recommended for FreeIPA/Active Directory. Supports inherited/nested groups automatically.
+  - **When false**: Queries groups for `member` attribute. Works with any LDAP. Direct members only.
 
 ### OpenFGA Configuration
 

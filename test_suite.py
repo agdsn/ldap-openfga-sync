@@ -568,6 +568,99 @@ class TestRunner:
         assert 'qa-team' in groups_in_openfga, "qa-team group should still exist"
         assert 'external-group' in groups_in_openfga, "external-group should still exist"
 
+    async def test_member_attribute_mode(self):
+        """Test 10: Verify member attribute mode works (default)"""
+        await self.env.clear_openfga_tuples()
+
+        # Explicitly set to use member attribute (default mode)
+        os.environ['LDAP_USE_MEMBEROF'] = 'false'
+        self.set_sync_groups(['developers', 'operations'])
+
+        before = await self.env.get_openfga_memberships()
+        logger.info(f"Before sync (member mode): {before}")
+
+        # Run sync
+        await sync_ldap_to_openfga()
+
+        after = await self.env.get_openfga_memberships()
+        logger.info(f"After sync (member mode): {after}")
+
+        # Verify correct memberships
+        expected = {
+            ('alice@example.com', 'developers'),
+            ('bob@example.com', 'developers'),
+            ('charlie@example.com', 'operations'),
+            ('dave@example.com', 'operations'),
+        }
+
+        assert after == expected, f"Member attribute mode failed. Expected {expected}, got {after}"
+        logger.info("✅ Member attribute mode works correctly")
+
+    async def test_memberof_mode(self):
+        """Test 11: Verify memberOf mode works (for FreeIPA/AD)"""
+        await self.env.clear_openfga_tuples()
+
+        # Set to use memberOf attribute
+        os.environ['LDAP_USE_MEMBEROF'] = 'true'
+        os.environ['LDAP_USER_BASE_DN'] = 'ou=users,dc=example,dc=com'
+        self.set_sync_groups(['developers', 'operations'])
+
+        before = await self.env.get_openfga_memberships()
+        logger.info(f"Before sync (memberOf mode): {before}")
+
+        # Run sync
+        await sync_ldap_to_openfga()
+
+        after = await self.env.get_openfga_memberships()
+        logger.info(f"After sync (memberOf mode): {after}")
+
+        # Verify correct memberships (should be same as member mode for test data)
+        expected = {
+            ('alice@example.com', 'developers'),
+            ('bob@example.com', 'developers'),
+            ('charlie@example.com', 'operations'),
+            ('dave@example.com', 'operations'),
+        }
+
+        assert after == expected, f"MemberOf mode failed. Expected {expected}, got {after}"
+        logger.info("✅ MemberOf mode works correctly")
+
+        # Reset to default
+        os.environ['LDAP_USE_MEMBEROF'] = 'false'
+
+    async def test_both_modes_produce_same_result(self):
+        """Test 12: Both member and memberOf modes should produce identical results"""
+
+        # Test with member attribute mode
+        await self.env.clear_openfga_tuples()
+        os.environ['LDAP_USE_MEMBEROF'] = 'false'
+        self.set_sync_groups(['developers', 'operations', 'managers'])
+
+        await sync_ldap_to_openfga()
+        member_mode_result = await self.env.get_openfga_memberships()
+        logger.info(f"Member mode result: {member_mode_result}")
+
+        # Test with memberOf mode
+        await self.env.clear_openfga_tuples()
+        os.environ['LDAP_USE_MEMBEROF'] = 'true'
+        os.environ['LDAP_USER_BASE_DN'] = 'ou=users,dc=example,dc=com'
+        self.set_sync_groups(['developers', 'operations', 'managers'])
+
+        await sync_ldap_to_openfga()
+        memberof_mode_result = await self.env.get_openfga_memberships()
+        logger.info(f"MemberOf mode result: {memberof_mode_result}")
+
+        # Both should produce identical results
+        assert member_mode_result == memberof_mode_result, \
+            f"Member and memberOf modes produced different results!\n" \
+            f"Member mode: {member_mode_result}\n" \
+            f"MemberOf mode: {memberof_mode_result}"
+
+        logger.info("✅ Both modes produce identical results")
+
+        # Reset to default
+        os.environ['LDAP_USE_MEMBEROF'] = 'false'
+
     def print_summary(self):
         """Print test summary"""
         total = self.passed + self.failed
@@ -607,6 +700,9 @@ async def main():
         await runner.run_test("Handle groups with different members", runner.test_empty_ldap_group)
         await runner.run_test("Sync all groups when SYNC_GROUPS not specified", runner.test_sync_all_groups)
         await runner.run_test("Groups not in SYNC_GROUPS are not touched", runner.test_ignore_groups_not_in_sync_list)
+        await runner.run_test("Member attribute mode works correctly", runner.test_member_attribute_mode)
+        await runner.run_test("MemberOf mode works correctly", runner.test_memberof_mode)
+        await runner.run_test("Both modes produce identical results", runner.test_both_modes_produce_same_result)
 
         # Print summary
         runner.print_summary()
