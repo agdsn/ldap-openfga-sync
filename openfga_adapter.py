@@ -8,6 +8,7 @@ from typing import Optional, Set
 from diffsync import Adapter
 from openfga_sdk import ReadRequestTupleKey
 from openfga_sdk.client import ClientConfiguration, OpenFgaClient
+from openfga_sdk.credentials import Credentials, CredentialConfiguration
 from openfga_sdk.client.models import (
     ClientTuple,
     ClientWriteRequest
@@ -44,18 +45,22 @@ class OpenFGAAdapter(Adapter):
 
         logger.info(f"Connecting to OpenFGA: {api_url}")
 
+        # Create credentials object if API token is provided
+        credentials = None
+        if api_token:
+            credential_config = CredentialConfiguration(
+                api_token=api_token
+            )
+            credentials = Credentials(
+                method="api_token",
+                configuration=credential_config
+            )
+
         configuration = ClientConfiguration(
             api_url=api_url,
             store_id=self.store_id,
+            credentials=credentials
         )
-
-        if api_token:
-            configuration.credentials = {
-                "method": "api_token",
-                "config": {
-                    "token": api_token
-                }
-            }
 
         self.client = OpenFgaClient(configuration)
         logger.info("Successfully connected to OpenFGA")
