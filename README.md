@@ -9,6 +9,7 @@ This script synchronizes group memberships from LDAP to OpenFGA using the [diffs
 - Supports dry-run mode to preview changes before applying them
 - Users are identified by their email addresses
 - Comprehensive logging
+- Runs as non-root user for enhanced security
 
 ## Requirements
 
