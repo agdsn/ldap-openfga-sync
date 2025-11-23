@@ -192,38 +192,6 @@ Where:
   - Either via a `mail` attribute in their DN
   - Or by querying the user object for the `mail` attribute
 
-## Troubleshooting
-
-### Email Extraction Issues
-
-If the script cannot extract emails from user DNs:
-
-1. Check that users have a `mail` attribute in LDAP
-2. Ensure the bind DN has permission to query user objects
-3. Check the logs for specific errors
-
-### Group Not Found
-
-If groups are being skipped:
-
-1. Verify the groups exist in OpenFGA
-2. Check that the group names match exactly (case-sensitive)
-3. Ensure you have the correct OpenFGA store ID
-
-### Connection Issues
-
-For LDAP connection problems:
-- Verify the LDAP server URL and port
-- Check firewall rules
-- Test TLS settings
-
-For OpenFGA connection problems:
-- Verify the API URL is correct
-- Check if authentication token is required and configured
-- Ensure the store ID is valid
-
-## Testing
-
 A comprehensive test suite is included with Docker Compose environment:
 
 ```bash
@@ -252,8 +220,3 @@ To contribute or modify the script:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Support
-
-[Add support information here]
-
