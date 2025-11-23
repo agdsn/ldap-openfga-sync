@@ -75,41 +75,60 @@ class OpenFGAAdapter(Adapter):
             await self.connect_openfga()
 
         try:
-            # Read all tuples and filter for 'member' relationships
-            body = ReadRequestTupleKey()
-            response = await self.client.read(body=body)
-
             membership_count = 0
+            continuation_token = None
+            page_size = 100  # OpenFGA default page size
 
-            if hasattr(response, 'tuples') and response.tuples:
-                for tuple_data in response.tuples:
-                    if hasattr(tuple_data, 'key'):
-                        key = tuple_data.key
+            # Paginate through all tuples
+            while True:
+                # Read tuples with pagination
+                body = ReadRequestTupleKey()
+                options = {
+                    "page_size": page_size
+                }
+                if continuation_token:
+                    options["continuation_token"] = continuation_token
 
-                        # Only process 'member' relationships
-                        if key.relation != 'member':
-                            continue
+                response = await self.client.read(body=body, options=options)
 
-                        # Extract user email and group name
-                        user_str = key.user  # Format: "user:email@example.com"
-                        group_str = key.object  # Format: "group:groupname"
+                # Process tuples in current page
+                if hasattr(response, 'tuples') and response.tuples:
+                    for tuple_data in response.tuples:
+                        if hasattr(tuple_data, 'key'):
+                            key = tuple_data.key
 
-                        if user_str.startswith('user:') and group_str.startswith('group:'):
-                            user_email = user_str.split(':', 1)[1]
-                            group_name = group_str.split(':', 1)[1]
-
-                            # Only load memberships for groups in the sync list
-                            if self.sync_groups is not None and group_name not in self.sync_groups:
-                                logger.debug(f"Skipping membership {user_email} -> {group_name} - group not in sync list")
+                            # Only process 'member' relationships
+                            if key.relation != 'member':
                                 continue
 
-                            membership = GroupMembership(
-                                user_email=user_email,
-                                group_name=group_name
-                            )
-                            self.add(membership)
-                            membership_count += 1
-                            logger.debug(f"Loaded membership: {user_email} -> {group_name}")
+                            # Extract user email and group name
+                            user_str = key.user  # Format: "user:email@example.com"
+                            group_str = key.object  # Format: "group:groupname"
+
+                            if user_str.startswith('user:') and group_str.startswith('group:'):
+                                user_email = user_str.split(':', 1)[1]
+                                group_name = group_str.split(':', 1)[1]
+
+                                # Only load memberships for groups in the sync list
+                                if self.sync_groups is not None and group_name not in self.sync_groups:
+                                    logger.debug(f"Skipping membership {user_email} -> {group_name} - group not in sync list")
+                                    continue
+
+                                membership = GroupMembership(
+                                    user_email=user_email,
+                                    group_name=group_name
+                                )
+                                self.add(membership)
+                                membership_count += 1
+                                logger.debug(f"Loaded membership: {user_email} -> {group_name}")
+
+                # Check if there are more pages
+                if hasattr(response, 'continuation_token') and response.continuation_token:
+                    continuation_token = response.continuation_token
+                    logger.debug(f"Fetching next page of tuples (loaded {membership_count} so far)")
+                else:
+                    # No more pages
+                    break
 
             logger.info(f"Loaded {membership_count} memberships from OpenFGA")
 

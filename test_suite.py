@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
 """
 Comprehensive test suite for LDAP to OpenFGA sync
-
-This script tests various scenarios:
-1. Initial sync (empty OpenFGA, populated LDAP)
-2. No changes (already in sync)
-3. Additions (new members in LDAP)
-4. Deletions (removed members from LDAP)
-5. Mixed changes (additions + deletions)
-6. Group filtering (only sync groups in OpenFGA)
 """
 
 import asyncio
 import json
 import logging
 import os
-import re
 import sys
 import time
 from typing import Dict, List, Set
@@ -661,6 +652,52 @@ class TestRunner:
         # Reset to default
         os.environ['LDAP_USE_MEMBEROF'] = 'false'
 
+    async def test_pagination_many_entries(self):
+        """Test 13: Verify pagination works with many entries (more than page size)"""
+        await self.env.clear_openfga_tuples()
+
+        # Create many memberships to exceed typical page size (100)
+        # We'll create 150 memberships to ensure pagination is needed
+        num_entries = 150
+        batch_size = 10  # Write in batches to avoid OpenFGA write limits
+        logger.info(f"Creating {num_entries} memberships in OpenFGA to test pagination")
+
+        memberships = []
+        for i in range(num_entries):
+            # Create memberships across different groups and users
+            group = ['developers', 'operations', 'managers'][i % 3]
+            email = f"testuser{i}@example.com"
+            memberships.append({'email': email, 'group': group})
+
+        # Add memberships in batches
+        for i in range(0, num_entries, batch_size):
+            batch = memberships[i:i + batch_size]
+            await self.env.add_openfga_memberships(batch)
+            logger.debug(f"Added batch {i//batch_size + 1}/{(num_entries + batch_size - 1)//batch_size}")
+
+        logger.info(f"Added {num_entries} memberships to OpenFGA in batches")
+
+        # Now load from OpenFGA and verify all are fetched
+        from openfga_adapter import OpenFGAAdapter
+
+        openfga_adapter = OpenFGAAdapter()
+        try:
+            await openfga_adapter.connect_openfga()
+            openfga_adapter.sync_groups = {'developers', 'operations', 'managers'}
+
+            await openfga_adapter.load()
+
+            loaded_count = len(openfga_adapter.get_all('membership'))
+            logger.info(f"Loaded {loaded_count} memberships from OpenFGA")
+
+            assert loaded_count == num_entries, \
+                f"Pagination failed! Expected {num_entries} memberships, but only loaded {loaded_count}"
+
+            logger.info("✅ Pagination works correctly - all entries fetched")
+        finally:
+            # Properly close the OpenFGA client to avoid unclosed connector warnings
+            await openfga_adapter.close()
+
     def print_summary(self):
         """Print test summary"""
         total = self.passed + self.failed
@@ -703,6 +740,7 @@ async def main():
         await runner.run_test("Member attribute mode works correctly", runner.test_member_attribute_mode)
         await runner.run_test("MemberOf mode works correctly", runner.test_memberof_mode)
         await runner.run_test("Both modes produce identical results", runner.test_both_modes_produce_same_result)
+        await runner.run_test("Pagination works with many entries", runner.test_pagination_many_entries)
 
         # Print summary
         runner.print_summary()
