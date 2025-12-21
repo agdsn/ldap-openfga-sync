@@ -203,15 +203,17 @@ A comprehensive test suite is included with Docker Compose environment:
 ./test.sh stop
 ```
 
+## Testing
+
 See [TESTING.md](TESTING.md) for detailed testing documentation.
 
 ## Development
 
 To contribute or modify the script:
 
-1. Install development dependencies (if any)
+1. Install development dependencies
 2. Make your changes
-3. Run the test suite: `./test.sh restart test`
+3. Run the test suite
 4. Test thoroughly in dry-run mode first
 5. Submit a pull request
 
